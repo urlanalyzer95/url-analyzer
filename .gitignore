@@ -1,0 +1,6 @@
+__pycache__/ 
+*.pyc 
+data/feedback.db 
+data/dataset.csv 
+.env 
+venv/ 
