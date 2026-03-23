@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL Analyzer</title>
+</head>
+<body>
+    <h1>Анализатор URL</h1>
+    <form id="urlForm">
+        <input type="text" id="url" placeholder="Введите URL" size="50">
+        <button type="submit">Проверить</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('urlForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('url').value;
+            const response = await fetch('/check', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url})
+            });
+            const result = await response.json();
+            document.getElementById('result').innerHTML = `
+                <h3>${result.verdict_text}</h3>
+                <p>Оценка: ${result.score}%</p>
+                <p>${result.explanations.join('<br>')}</p>
+            `;
+        };
+    </script>
+</body>
+</html>
