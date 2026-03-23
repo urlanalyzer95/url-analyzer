@@ -1,13 +1,27 @@
 from flask import Flask, render_template, request, jsonify
-import redis
 import json
 import sqlite3
 import os
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Подключение Redis
-redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+# Простой кэш в памяти (вместо Redis)
+cache = {}
+
+def get_cached(url):
+    """Получить данные из кэша"""
+    if url in cache:
+        data, timestamp = cache[url]
+        if datetime.now() - timestamp < timedelta(hours=1):
+            return data
+        else:
+            del cache[url]
+    return None
+
+def set_cached(url, data):
+    """Сохранить данные в кэш"""
+    cache[url] = (data, datetime.now())
 
 # Главная страница
 @app.route('/')
@@ -20,12 +34,12 @@ def check_url():
     data = request.json
     url = data.get('url')
     
-    # Проверка кэша
-    cached = redis_client.get(url)
+    # Проверка кэша (вместо Redis)
+    cached = get_cached(url)
     if cached:
-        return jsonify(json.loads(cached))
+        return jsonify(cached)
     
-    # Простой анализ (заглушка)
+    # Простой анализ
     score = 0.3
     if 'login' in url.lower() or 'verify' in url.lower():
         score = 0.8
@@ -63,7 +77,7 @@ def check_url():
     }
     
     # Сохранение в кэш
-    redis_client.setex(url, 3600, json.dumps(result))
+    set_cached(url, result)
     
     return jsonify(result)
 
@@ -71,6 +85,9 @@ def check_url():
 @app.route('/feedback', methods=['POST'])
 def feedback():
     data = request.json
+    
+    # Создаём папку data, если её нет
+    os.makedirs('data', exist_ok=True)
     
     conn = sqlite3.connect('data/feedback.db')
     cursor = conn.cursor()
@@ -94,5 +111,3 @@ def feedback():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-#22
