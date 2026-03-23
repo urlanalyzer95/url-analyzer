@@ -1,0 +1,25 @@
+{
+  "source_file": "url_dataset.csv",
+  "feature_columns": [
+    "url_length",
+    "num_dots",
+    "num_hyphens",
+    "num_slashes",
+    "num_params",
+    "has_ip",
+    "has_https",
+    "has_login",
+    "has_verify",
+    "has_account",
+    "has_cp.php",
+    "has_admin",
+    "is_shortened",
+    "domain_length"
+  ],
+  "label_mapping": {
+    "legitimate": 0,
+    "phishing": 1
+  },
+  "total_samples": 208868,
+  "generated_at": "2026-03-23T19:53:54.834662"
+}
