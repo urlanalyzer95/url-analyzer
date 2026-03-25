@@ -8,24 +8,26 @@ from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import joblib
 
-# === ПРИНУДИТЕЛЬНЫЙ ВЫВОД ЛОГОВ ===
 print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
 
-# === ФУНКЦИЯ ПРОВЕРКИ ВАЛИДНОСТИ URL ===
+def normalize_url(url):
+    url = url.strip()
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    url = url.lower()
+    url = url.rstrip('/')
+    return url
+
 def is_valid_url(url):
-    """Проверяет, является ли строка валидным URL"""
     if not url:
         return False
-    # Должен начинаться с http:// или https://
     if not url.startswith(('http://', 'https://')):
         return False
-    # Не должен содержать пробелов
     if ' ' in url:
         return False
-    # Должен содержать домен с точкой
     try:
         domain = url.split('/')[2]
         if '.' not in domain:
@@ -34,21 +36,60 @@ def is_valid_url(url):
         return False
     return True
 
-# === ЗАГРУЗКА ПРИЗНАКОВ И МОДЕЛИ ===
+def is_localhost(url):
+    local_patterns = [
+        r'localhost',
+        r'127\.0\.0\.1',
+        r'192\.168\.\d{1,3}\.\d{1,3}',
+        r'10\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+    ]
+    for pattern in local_patterns:
+        if re.search(pattern, url):
+            return True
+    return False
+
+def is_typosquatting(url):
+    popular_domains = ['google', 'facebook', 'youtube', 'vk', 'mail', 'yandex', 'gmail', 'yahoo']
+    try:
+        domain = url.split('/')[2].lower()
+        for popular in popular_domains:
+            if popular in domain and popular != domain:
+                if len(domain) > len(popular) + 1:
+                    return True
+                suspicious = domain.replace('0', 'o').replace('1', 'l').replace('5', 's').replace('@', 'a')
+                if popular in suspicious and popular != suspicious:
+                    return True
+    except:
+        pass
+    return False
+
+def is_suspicious_tld(url):
+    suspicious_tlds = ['.xyz', '.top', '.club', '.online', '.site', '.pw', '.cc', '.tk', '.ml', '.ga', '.cf']
+    for tld in suspicious_tlds:
+        if tld in url:
+            return True
+    return False
+
+def has_redirects(url):
+    try:
+        if 'redirect=' in url or 'url=' in url or 'return=' in url or 'next=' in url or 'goto=' in url:
+            return True
+    except:
+        pass
+    return False
+
+def is_too_long(url):
+    return len(url) > 200
+
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
 try:
-    # Загружаем таблицу с признаками
     features_df = pd.read_csv('data/processed/url_dataset_features.csv')
-    # Определяем колонки-признаки (все кроме url и label)
     feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
     print(f"✅ Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
-    
-    # Загружаем модель
     model = joblib.load('ml/model.pkl')
     print("✅ Model loaded successfully", file=sys.stderr)
-    
 except Exception as e:
     print(f"❌ Error loading features or model: {e}", file=sys.stderr)
     features_df = None
@@ -57,7 +98,6 @@ except Exception as e:
 
 sys.stderr.flush()
 
-# === КЭШ В ПАМЯТИ ===
 cache = {}
 
 def get_cached(url):
@@ -72,7 +112,6 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# === РОУТЫ ===
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -87,48 +126,53 @@ def health():
 @app.route('/check', methods=['POST'])
 def check_url():
     data = request.json
-    url = data.get('url')
+    raw_url = data.get('url')
     
-    if not url:
+    if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
     
-    # === ПРОВЕРКА ВАЛИДНОСТИ URL ===
+    url = normalize_url(raw_url)
+    
     if not is_valid_url(url):
         return jsonify({
-            'url': url,
+            'url': raw_url,
             'verdict': 'invalid',
             'verdict_text': '❌ НЕВАЛИДНЫЙ URL',
             'score': 0,
             'explanations': [
                 'URL должен начинаться с http:// или https://',
                 'URL не должен содержать пробелов',
-                'Пример правильного URL: https://google.com'
+                'Пример: https://google.com'
             ]
         }), 400
     
-    # Проверка кэша
+    if is_localhost(url):
+        return jsonify({
+            'url': url,
+            'verdict': 'warning',
+            'verdict_text': '⚠️ ЛОКАЛЬНЫЙ АДРЕС',
+            'score': 0,
+            'explanations': ['Локальные адреса (localhost, 192.168.x.x) не проверяются']
+        })
+    
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
     
-    # Анализ через ML-модель
     try:
         if model is None or features_df is None:
             raise Exception("Модель или признаки не загружены")
         
-        # Ищем URL в таблице признаков
         url_row = features_df[features_df['url'] == url]
         
         if url_row.empty:
-            # Если URL нет в таблице — fallback
             print(f"⚠️ URL не найден в датасете: {url}", file=sys.stderr)
             score = 0.3
-            if 'login' in url.lower() or 'verify' in url.lower():
+            if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
                 score = 0.8
-            elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
+            elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
                 score = 0.6
         else:
-            # Берем признаки и предсказываем
             X = url_row[feature_columns]
             score = model.predict_proba(X)[0][1]
             print(f"✅ Предсказание для {url}: score={score:.2f}", file=sys.stderr)
@@ -136,12 +180,11 @@ def check_url():
     except Exception as e:
         print(f"⚠️ Ошибка при анализе URL {url}: {e}", file=sys.stderr)
         score = 0.3
-        if 'login' in url.lower() or 'verify' in url.lower():
+        if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
             score = 0.8
-        elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
+        elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
             score = 0.6
     
-    # Вердикт
     if score > 0.7:
         verdict = "dangerous"
         verdict_text = "🔴 ОПАСНО"
@@ -152,35 +195,41 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # Объяснения
     explanations = []
     
-    # Проверка HTTPS
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
     
-    # Подозрительные слова
-    if 'login' in url.lower() or 'verify' in url.lower():
-        explanations.append("Обнаружены подозрительные слова (login, verify)")
+    if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
+        explanations.append("Обнаружены подозрительные слова (login, verify, secure)")
     
-    # Сокращатели ссылок
     if 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
         explanations.append("Использован сервис сокращения ссылок")
     
-    # IP вместо домена
     ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}')
     if ip_pattern.match(url):
         explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
     
-    # Символ @
     if '@' in url:
         explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+    
+    if is_typosquatting(url):
+        explanations.append("Ссылка имитирует домен известного сайта")
+    
+    if is_suspicious_tld(url):
+        explanations.append("Использована подозрительная доменная зона")
+    
+    if has_redirects(url):
+        explanations.append("Ссылка содержит параметры перенаправления")
+    
+    if is_too_long(url):
+        explanations.append("Ссылка слишком длинная (более 200 символов)")
     
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
     
     result = {
-        'url': url,
+        'url': raw_url,
         'verdict': verdict,
         'verdict_text': verdict_text,
         'score': round(score * 100),
