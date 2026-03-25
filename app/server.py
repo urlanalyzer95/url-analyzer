@@ -2,6 +2,7 @@ import sys
 import json
 import sqlite3
 import os
+import re
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
@@ -12,6 +13,26 @@ print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
+
+# === ФУНКЦИЯ ПРОВЕРКИ ВАЛИДНОСТИ URL ===
+def is_valid_url(url):
+    """Проверяет, является ли строка валидным URL"""
+    if not url:
+        return False
+    # Должен начинаться с http:// или https://
+    if not url.startswith(('http://', 'https://')):
+        return False
+    # Не должен содержать пробелов
+    if ' ' in url:
+        return False
+    # Должен содержать домен с точкой
+    try:
+        domain = url.split('/')[2]
+        if '.' not in domain:
+            return False
+    except:
+        return False
+    return True
 
 # === ЗАГРУЗКА ПРИЗНАКОВ И МОДЕЛИ ===
 print("Loading features and model...", file=sys.stderr)
@@ -71,6 +92,20 @@ def check_url():
     if not url:
         return jsonify({'error': 'URL не указан'}), 400
     
+    # === ПРОВЕРКА ВАЛИДНОСТИ URL ===
+    if not is_valid_url(url):
+        return jsonify({
+            'url': url,
+            'verdict': 'invalid',
+            'verdict_text': '❌ НЕВАЛИДНЫЙ URL',
+            'score': 0,
+            'explanations': [
+                'URL должен начинаться с http:// или https://',
+                'URL не должен содержать пробелов',
+                'Пример правильного URL: https://google.com'
+            ]
+        }), 400
+    
     # Проверка кэша
     cached = get_cached(url)
     if cached:
@@ -117,16 +152,32 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # Объяснения (упрощённые, т.к. нет детальных признаков из extract_features)
+    # Объяснения
     explanations = []
-    if 'login' in url.lower() or 'verify' in url.lower():
-        explanations.append("Обнаружены подозрительные слова (login, verify)")
-    if 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
-        explanations.append("Использован сервис сокращения ссылок")
+    
+    # Проверка HTTPS
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
+    
+    # Подозрительные слова
+    if 'login' in url.lower() or 'verify' in url.lower():
+        explanations.append("Обнаружены подозрительные слова (login, verify)")
+    
+    # Сокращатели ссылок
+    if 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
+        explanations.append("Использован сервис сокращения ссылок")
+    
+    # IP вместо домена
+    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}')
+    if ip_pattern.match(url):
+        explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
+    
+    # Символ @
+    if '@' in url:
+        explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+    
     if not explanations:
-        explanations.append("Анализ на основе обученной модели")
+        explanations.append("Явных признаков фишинга не обнаружено")
     
     result = {
         'url': url,
