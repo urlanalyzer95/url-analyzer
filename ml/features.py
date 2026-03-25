@@ -2,7 +2,7 @@ import re
 from urllib.parse import urlparse
 
 def extract_features(url):
-    url = str(url).lower().strip()
+    url = str(url).lower().strip()#
     
     features = []
 
