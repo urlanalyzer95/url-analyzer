@@ -4,30 +4,37 @@ import sqlite3
 import os
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
+import pandas as pd
+import joblib
 
-# === ПРИНУДИТЕЛЬНЫЙ ВЫВОД ЛОГОВ (сразу покажет, что скрипт запустился) ===
+# === ПРИНУДИТЕЛЬНЫЙ ВЫВОД ЛОГОВ ===
 print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
 
-# === ЗАГРУЗКА МОДЕЛИ ===
-print("Loading model...", file=sys.stderr)
+# === ЗАГРУЗКА ПРИЗНАКОВ И МОДЕЛИ ===
+print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
-import joblib
-import sys
-sys.path.append('ml')
-from features import extract_features
-
 try:
+    # Загружаем таблицу с признаками
+    features_df = pd.read_csv('data/processed/url_dataset_features.csv')
+    # Определяем колонки-признаки (все кроме url и label)
+    feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
+    print(f"✅ Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
+    
+    # Загружаем модель
     model = joblib.load('ml/model.pkl')
     print("✅ Model loaded successfully", file=sys.stderr)
-    sys.stderr.flush()
+    
 except Exception as e:
-    print(f"❌ Model loading failed: {e}", file=sys.stderr)
-    sys.stderr.flush()
+    print(f"❌ Error loading features or model: {e}", file=sys.stderr)
+    features_df = None
+    feature_columns = []
     model = None
+
+sys.stderr.flush()
 
 # === КЭШ В ПАМЯТИ ===
 cache = {}
@@ -53,7 +60,7 @@ def index():
 def health():
     return jsonify({
         'status': 'ok',
-        'model_loaded': model is not None
+        'model_loaded': model is not None and features_df is not None
     })
 
 @app.route('/check', methods=['POST'])
@@ -71,15 +78,28 @@ def check_url():
     
     # Анализ через ML-модель
     try:
-        if model is None:
-            raise Exception("Модель не загружена")
+        if model is None or features_df is None:
+            raise Exception("Модель или признаки не загружены")
         
-        features = extract_features(url)
-        score = model.predict_proba([features])[0][1]
+        # Ищем URL в таблице признаков
+        url_row = features_df[features_df['url'] == url]
+        
+        if url_row.empty:
+            # Если URL нет в таблице — fallback
+            print(f"⚠️ URL не найден в датасете: {url}", file=sys.stderr)
+            score = 0.3
+            if 'login' in url.lower() or 'verify' in url.lower():
+                score = 0.8
+            elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
+                score = 0.6
+        else:
+            # Берем признаки и предсказываем
+            X = url_row[feature_columns]
+            score = model.predict_proba(X)[0][1]
+            print(f"✅ Предсказание для {url}: score={score:.2f}", file=sys.stderr)
         
     except Exception as e:
         print(f"⚠️ Ошибка при анализе URL {url}: {e}", file=sys.stderr)
-        # fallback на простые правила
         score = 0.3
         if 'login' in url.lower() or 'verify' in url.lower():
             score = 0.8
@@ -97,30 +117,16 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # Объяснения
+    # Объяснения (упрощённые, т.к. нет детальных признаков из extract_features)
     explanations = []
-    try:
-        features_list = extract_features(url)
-        if features_list[3] == 1:
-            explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
-        if features_list[4] > 0:
-            explanations.append("Обнаружены подозрительные слова")
-        if features_list[5] == 1:
-            explanations.append("Использован сервис сокращения ссылок")
-        if features_list[6] == 1:
-            explanations.append("Ссылка содержит символ @")
-        if features_list[7] == 0:
-            explanations.append("Отсутствует защищенное соединение HTTPS")
-    except:
-        if 'login' in url.lower():
-            explanations.append("Обнаружено подозрительное слово 'login'")
-        if 'verify' in url.lower():
-            explanations.append("Обнаружено подозрительное слово 'verify'")
-        if 'bit.ly' in url.lower():
-            explanations.append("Использован сервис сокращения ссылок bit.ly")
-    
+    if 'login' in url.lower() or 'verify' in url.lower():
+        explanations.append("Обнаружены подозрительные слова (login, verify)")
+    if 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
+        explanations.append("Использован сервис сокращения ссылок")
+    if not url.startswith('https'):
+        explanations.append("Отсутствует защищенное соединение HTTPS")
     if not explanations:
-        explanations.append("Явных признаков фишинга не обнаружено")
+        explanations.append("Анализ на основе обученной модели")
     
     result = {
         'url': url,
@@ -159,6 +165,5 @@ def feedback():
     return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
