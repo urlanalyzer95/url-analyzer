@@ -28,12 +28,25 @@ def is_valid_url(url):
         return False
     if ' ' in url:
         return False
+    
     try:
         domain = url.split('/')[2]
+        
         if '.' not in domain:
             return False
+        
+        invalid_chars = [',', ';', '|', '\\', '^', '`', '[', ']', '{', '}', '<', '>', '"', "'"]
+        for char in invalid_chars:
+            if char in domain:
+                return False
+        
+        domain_pattern = re.compile(r'^[a-z0-9.-]+$')
+        if not domain_pattern.match(domain):
+            return False
+            
     except:
         return False
+    
     return True
 
 def is_localhost(url):
