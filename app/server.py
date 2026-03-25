@@ -1,30 +1,38 @@
-from flask import Flask, render_template, request, jsonify
+import sys
 import json
 import sqlite3
 import os
 from datetime import datetime, timedelta
-import sys
-import joblib
+from flask import Flask, render_template, request, jsonify
+
+# === ПРИНУДИТЕЛЬНЫЙ ВЫВОД ЛОГОВ (сразу покажет, что скрипт запустился) ===
+print("=== SERVER STARTING ===", file=sys.stderr)
+sys.stderr.flush()
 
 app = Flask(__name__)
 
-# Загрузка ML-модели при старте сервера
-print("📦 Загрузка ML-модели...")
+# === ЗАГРУЗКА МОДЕЛИ ===
+print("Loading model...", file=sys.stderr)
+sys.stderr.flush()
+
+import joblib
+import sys
 sys.path.append('ml')
 from features import extract_features
 
 try:
     model = joblib.load('ml/model.pkl')
-    print("✅ Модель успешно загружена")
+    print("✅ Model loaded successfully", file=sys.stderr)
+    sys.stderr.flush()
 except Exception as e:
-    print(f"❌ Ошибка загрузки модели: {e}")
+    print(f"❌ Model loading failed: {e}", file=sys.stderr)
+    sys.stderr.flush()
     model = None
 
-# Простой кэш в памяти (вместо Redis)
+# === КЭШ В ПАМЯТИ ===
 cache = {}
 
 def get_cached(url):
-    """Получить данные из кэша"""
     if url in cache:
         data, timestamp = cache[url]
         if datetime.now() - timestamp < timedelta(hours=1):
@@ -34,15 +42,20 @@ def get_cached(url):
     return None
 
 def set_cached(url, data):
-    """Сохранить данные в кэш"""
     cache[url] = (data, datetime.now())
 
-# Главная страница
+# === РОУТЫ ===
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Проверка URL
+@app.route('/health')
+def health():
+    return jsonify({
+        'status': 'ok',
+        'model_loaded': model is not None
+    })
+
 @app.route('/check', methods=['POST'])
 def check_url():
     data = request.json
@@ -61,14 +74,11 @@ def check_url():
         if model is None:
             raise Exception("Модель не загружена")
         
-        # Извлечение признаков
         features = extract_features(url)
-        
-        # Предсказание (вероятность класса 1 - фишинг)
         score = model.predict_proba([features])[0][1]
         
     except Exception as e:
-        print(f"Ошибка при анализе URL {url}: {e}")
+        print(f"⚠️ Ошибка при анализе URL {url}: {e}", file=sys.stderr)
         # fallback на простые правила
         score = 0.3
         if 'login' in url.lower() or 'verify' in url.lower():
@@ -87,25 +97,21 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # Генерация объяснений на основе признаков
+    # Объяснения
     explanations = []
     try:
         features_list = extract_features(url)
-        # Признаки: [длина, точки, слэши, has_ip, susp_count, is_short, has_at, has_https]
-        
-        if features_list[3] == 1:  # has_ip
+        if features_list[3] == 1:
             explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
-        if features_list[4] > 0:  # suspicious_words_count
-            explanations.append(f"Обнаружены подозрительные слова")
-        if features_list[5] == 1:  # is_shortened
+        if features_list[4] > 0:
+            explanations.append("Обнаружены подозрительные слова")
+        if features_list[5] == 1:
             explanations.append("Использован сервис сокращения ссылок")
-        if features_list[6] == 1:  # has_at
+        if features_list[6] == 1:
             explanations.append("Ссылка содержит символ @")
-        if features_list[7] == 0:  # not https
+        if features_list[7] == 0:
             explanations.append("Отсутствует защищенное соединение HTTPS")
-            
     except:
-        # fallback объяснения
         if 'login' in url.lower():
             explanations.append("Обнаружено подозрительное слово 'login'")
         if 'verify' in url.lower():
@@ -124,19 +130,14 @@ def check_url():
         'explanations': explanations
     }
     
-    # Сохранение в кэш
     set_cached(url, result)
-    
     return jsonify(result)
 
-# Обратная связь
 @app.route('/feedback', methods=['POST'])
 def feedback():
     data = request.json
     
-    # Создаём папку data, если её нет
     os.makedirs('data', exist_ok=True)
-    
     conn = sqlite3.connect('data/feedback.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -156,14 +157,6 @@ def feedback():
     conn.close()
     
     return jsonify({'status': 'ok'})
-
-# Проверка здоровья сервера
-@app.route('/health')
-def health():
-    return jsonify({
-        'status': 'ok',
-        'model_loaded': model is not None
-    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
