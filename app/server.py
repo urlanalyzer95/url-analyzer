@@ -1,20 +1,24 @@
-#import sys
-#sys.path.append('../ml')
-
-#from features import extract_features
-#import joblib
-
-#model = joblib.load('../ml/model.pkl')
-
-
-
 from flask import Flask, render_template, request, jsonify
 import json
 import sqlite3
 import os
 from datetime import datetime, timedelta
+import sys
+import joblib
 
 app = Flask(__name__)
+
+# Загрузка ML-модели при старте сервера
+print("📦 Загрузка ML-модели...")
+sys.path.append('ml')
+from features import extract_features
+
+try:
+    model = joblib.load('ml/model.pkl')
+    print("✅ Модель успешно загружена")
+except Exception as e:
+    print(f"❌ Ошибка загрузки модели: {e}")
+    model = None
 
 # Простой кэш в памяти (вместо Redis)
 cache = {}
@@ -44,19 +48,33 @@ def check_url():
     data = request.json
     url = data.get('url')
     
-    # Проверка кэша (вместо Redis)
+    if not url:
+        return jsonify({'error': 'URL не указан'}), 400
+    
+    # Проверка кэша
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
     
-    # Простой анализ - нужно заменить на:
-    #features = extract_features(url)
-    #score = model.predict_proba([features])[0][1]   
-    score = 0.3
-    if 'login' in url.lower() or 'verify' in url.lower():
-        score = 0.8
-    elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
-        score = 0.6
+    # Анализ через ML-модель
+    try:
+        if model is None:
+            raise Exception("Модель не загружена")
+        
+        # Извлечение признаков
+        features = extract_features(url)
+        
+        # Предсказание (вероятность класса 1 - фишинг)
+        score = model.predict_proba([features])[0][1]
+        
+    except Exception as e:
+        print(f"Ошибка при анализе URL {url}: {e}")
+        # fallback на простые правила
+        score = 0.3
+        if 'login' in url.lower() or 'verify' in url.lower():
+            score = 0.8
+        elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower():
+            score = 0.6
     
     # Вердикт
     if score > 0.7:
@@ -69,14 +87,32 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # Объяснения
+    # Генерация объяснений на основе признаков
     explanations = []
-    if 'login' in url.lower():
-        explanations.append("Обнаружено подозрительное слово 'login'")
-    if 'verify' in url.lower():
-        explanations.append("Обнаружено подозрительное слово 'verify'")
-    if 'bit.ly' in url.lower():
-        explanations.append("Использован сервис сокращения ссылок bit.ly")
+    try:
+        features_list = extract_features(url)
+        # Признаки: [длина, точки, слэши, has_ip, susp_count, is_short, has_at, has_https]
+        
+        if features_list[3] == 1:  # has_ip
+            explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
+        if features_list[4] > 0:  # suspicious_words_count
+            explanations.append(f"Обнаружены подозрительные слова")
+        if features_list[5] == 1:  # is_shortened
+            explanations.append("Использован сервис сокращения ссылок")
+        if features_list[6] == 1:  # has_at
+            explanations.append("Ссылка содержит символ @")
+        if features_list[7] == 0:  # not https
+            explanations.append("Отсутствует защищенное соединение HTTPS")
+            
+    except:
+        # fallback объяснения
+        if 'login' in url.lower():
+            explanations.append("Обнаружено подозрительное слово 'login'")
+        if 'verify' in url.lower():
+            explanations.append("Обнаружено подозрительное слово 'verify'")
+        if 'bit.ly' in url.lower():
+            explanations.append("Использован сервис сокращения ссылок bit.ly")
+    
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
     
@@ -120,6 +156,14 @@ def feedback():
     conn.close()
     
     return jsonify({'status': 'ok'})
+
+# Проверка здоровья сервера
+@app.route('/health')
+def health():
+    return jsonify({
+        'status': 'ok',
+        'model_loaded': model is not None
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
