@@ -1,3 +1,13 @@
+#import sys
+#sys.path.append('../ml')
+
+#from features import extract_features
+#import joblib
+
+#model = joblib.load('../ml/model.pkl')
+
+
+
 from flask import Flask, render_template, request, jsonify
 import json
 import sqlite3
@@ -39,7 +49,9 @@ def check_url():
     if cached:
         return jsonify(cached)
     
-    # Простой анализ
+    # Простой анализ - нужно заменить на:
+    #features = extract_features(url)
+    #score = model.predict_proba([features])[0][1]   
     score = 0.3
     if 'login' in url.lower() or 'verify' in url.lower():
         score = 0.8
