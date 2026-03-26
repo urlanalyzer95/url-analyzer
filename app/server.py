@@ -28,25 +28,20 @@ def is_valid_url(url):
         return False
     if ' ' in url:
         return False
-    
     try:
         domain = url.split('/')[2]
-        
         if '.' not in domain:
             return False
-        
+        # Проверка на недопустимые символы в домене
         invalid_chars = [',', ';', '|', '\\', '^', '`', '[', ']', '{', '}', '<', '>', '"', "'"]
         for char in invalid_chars:
             if char in domain:
                 return False
-        
         domain_pattern = re.compile(r'^[a-z0-9.-]+$')
         if not domain_pattern.match(domain):
             return False
-            
     except:
         return False
-    
     return True
 
 def is_localhost(url):
@@ -224,7 +219,7 @@ def check_url():
         explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
     
     if '@' in url:
-        explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+        explanations.append("Ссылка содержит символ @ (может использоваться для обмана")
     
     if is_typosquatting(url):
         explanations.append("Ссылка имитирует домен известного сайта")
@@ -276,6 +271,72 @@ def feedback():
     conn.close()
     
     return jsonify({'status': 'ok'})
+
+# ===== НОВЫЙ ЭНДПОИНТ ДЛЯ ПРОСМОТРА ОТЗЫВОВ =====
+@app.route('/admin/feedbacks')
+def admin_feedbacks():
+    """Показывает все отзывы пользователей в виде HTML таблицы"""
+    conn = sqlite3.connect('data/feedback.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM feedbacks ORDER BY timestamp DESC LIMIT 100')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Отзывы пользователей</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            h1 { color: #333; }
+            table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background: #667eea; color: white; }
+            tr:hover { background: #f5f5f5; }
+            .correct { color: green; font-weight: bold; }
+            .wrong { color: red; font-weight: bold; }
+            .back { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; }
+            .back:hover { background: #5a67d8; }
+        </style>
+    </head>
+    <body>
+        <h1>📋 Отзывы пользователей</h1>
+        <p>Всего отзывов: ''' + str(len(rows)) + '''</p>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>URL</th>
+                <th>Вердикт модели</th>
+                <th>Вердикт пользователя</th>
+                <th>Дата</th>
+                <th>Совпадение</th>
+            </tr>
+    '''
+    
+    for row in rows:
+        match_class = 'correct' if row[2] == row[3] else 'wrong'
+        match_text = '✅' if row[2] == row[3] else '❌'
+        
+        html += f'''
+            <tr>
+                <td>{row[0]}</td>
+                <td style="word-break: break-all; max-width: 400px;">{row[1][:80]}{"..." if len(row[1]) > 80 else ""}</td>
+                <td>{row[2]}</td>
+                <td class="{match_class}">{row[3]}</td>
+                <td>{row[4]}</td>
+                <td>{match_text}</td>
+            </tr>
+        '''
+    
+    html += '''
+        </table>
+        <a href="/" class="back">← На главную</a>
+    </body>
+    </html>
+    '''
+    
+    return html
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
