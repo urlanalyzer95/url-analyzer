@@ -169,11 +169,9 @@ def is_too_long(url):
     return len(url) > 200
 
 def has_brand_phishing(url):
-    brands = [
-        'paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
-        'amazon', 'facebook', 'instagram', 'bank', 'sberbank',
-        'vtb', 'tinkoff', 'alfabank', 'yahoo', 'gmail'
-    ]
+    brands = ['paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
+              'amazon', 'facebook', 'instagram', 'bank', 'sberbank',
+              'vtb', 'tinkoff', 'alfabank', 'yahoo', 'gmail']
     try:
         url_lower = url.lower()
         for brand in brands:
@@ -185,6 +183,13 @@ def has_brand_phishing(url):
     except:
         pass
     return False
+
+def is_ip_with_port(url):  
+    try:
+        ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}:\d+')
+        return bool(ip_pattern.search(url))  # search() + try
+    except:
+        return False
 
 def is_ip_with_port(url):
     ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}:\d+')
