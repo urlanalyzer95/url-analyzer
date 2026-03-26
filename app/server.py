@@ -14,8 +14,13 @@ sys.stderr.flush()
 
 app = Flask(__name__)
 
-# Redis подключение
-redis_client = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+# Redis подключение (с fallback)
+try:
+    redis_client = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+    print("✅ Redis подключен", file=sys.stderr)
+except:
+    print("⚠️ Redis недоступен, использую память", file=sys.stderr)
+    redis_client = None
 
 # ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 def normalize_url(url):
@@ -27,42 +32,27 @@ def normalize_url(url):
     return url
 
 def is_valid_url(url):
-    if not url:
-        return False
-    if not url.startswith(('http://', 'https://')):
-        return False
-    if ' ' in url:
+    if not url or not url.startswith(('http://', 'https://')) or ' ' in url:
         return False
     try:
-        domain_part = url.split('/')[2]
-        if ':' in domain_part:
-            domain_part = domain_part.split(':')[0]
-        
+        domain_part = url.split('/')[2].split(':')[0]
         if '.' not in domain_part:
             return False
-        
         ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
         if ip_pattern.match(domain_part):
             return True
-        
         invalid_chars = [',', ';', '|', '\\', '^', '`', '[', ']', '{', '}', '<', '>', '"', "'"]
-        for char in invalid_chars:
-            if char in domain_part:
-                return False
-        domain_pattern = re.compile(r'^[a-z0-9.-]+$')
-        if not domain_pattern.match(domain_part):
+        if any(char in domain_part for char in invalid_chars):
             return False
+        domain_pattern = re.compile(r'^[a-z0-9.-]+$')
+        return bool(domain_pattern.match(domain_part))
     except:
         return False
-    return True
 
 # ========== ЭВРИСТИКИ ==========
 def has_homoglyphs(url):
     dangerous_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']
-    for char in url.lower():
-        if char in dangerous_chars:
-            return True
-    return False
+    return any(char in url.lower() for char in dangerous_chars)
 
 def has_encoding(url):
     return bool(re.search(r'%[0-9A-Fa-f]{2}', url))
@@ -71,181 +61,146 @@ def has_suspicious_path(url):
     suspicious_paths = ['login', 'verify', 'secure', 'account', 'banking', 'payment', 'update', 'confirm']
     try:
         path_parts = url.split('/')[3:]
-        for part in path_parts:
-            for word in suspicious_paths:
-                if word in part.lower():
-                    return True
+        return any(word in part.lower() for part in path_parts for word in suspicious_paths)
     except:
-        pass
-    return False
+        return False
 
 def has_suspicious_params(url):
     suspicious_params = ['redirect', 'url', 'return', 'next', 'goto', 'target', 'redir']
     if '?' in url:
-        params = url.split('?')[1]
-        for param in suspicious_params:
-            if param + '=' in params.lower():
-                return True
+        params = url.split('?')[1].lower()
+        return any(param + '=' in params for param in suspicious_params)
     return False
 
 def is_short_domain(url):
     try:
-        domain = url.split('/')[2]
-        if ':' in domain:
-            domain = domain.split(':')[0]
+        domain = url.split('/')[2].split(':')[0]
         main_part = domain.split('.')[0]
         legitimate_short = ['ya', 'vk', 'ok', 'fb', 'gg', 'go', 'im', 'tv', 'io', 'ru', 'com']
-        if main_part in legitimate_short:
-            return False
-        return len(main_part) <= 3
+        return main_part not in legitimate_short and len(main_part) <= 3
     except:
         return False
 
 def has_numbers_in_domain(url):
     try:
-        domain = url.split('/')[2]
-        if ':' in domain:
-            domain = domain.split(':')[0]
-        digits = sum(c.isdigit() for c in domain)
-        return digits > 5
+        domain = url.split('/')[2].split(':')[0]
+        return sum(c.isdigit() for c in domain) > 5
     except:
         return False
 
 def has_many_subdomains(url):
     try:
-        domain = url.split('/')[2]
-        if ':' in domain:
-            domain = domain.split(':')[0]
+        domain = url.split('/')[2].split(':')[0]
         subdomains = domain.split('.')[:-2]
         return len(subdomains) > 3
     except:
         return False
 
 def is_localhost(url):
-    local_patterns = [
-        r'localhost',
-        r'127\.0\.0\.1',
-        r'192\.168\.\d{1,3}\.\d{1,3}',
-        r'10\.\d{1,3}\.\d{1,3}\.\d{1,3}'
-    ]
-    for pattern in local_patterns:
-        if re.search(pattern, url):
-            return True
-    return False
+    local_patterns = [r'localhost', r'127\.0\.0\.1', r'192\.168\.\d{1,3}\.\d{1,3}', r'10\.\d{1,3}\.\d{1,3}\.\d{1,3}']
+    return any(re.search(pattern, url) for pattern in local_patterns)
 
 def is_typosquatting(url):
     popular_domains = ['google', 'facebook', 'youtube', 'vk', 'mail', 'yandex', 'gmail', 'yahoo', 'instagram', 'twitter', 'whatsapp', 'telegram', 'github']
     try:
-        domain = url.split('/')[2].lower()
-        if ':' in domain:
-            domain = domain.split(':')[0]
+        domain = url.split('/')[2].lower().split(':')[0]
         for popular in popular_domains:
-            if popular in domain and popular != domain:
-                if len(domain) > len(popular) + 1:
-                    return True
-                suspicious = domain.replace('0', 'o').replace('1', 'l').replace('5', 's').replace('@', 'a')
-                if popular in suspicious and popular != suspicious:
-                    return True
+            if popular in domain and popular != domain and len(domain) > len(popular) + 1:
+                return True
     except:
         pass
     return False
 
 def is_suspicious_tld(url):
-    suspicious_tlds = ['.xyz', '.top', '.club', '.online', '.site', '.pw', '.cc', '.tk', '.ml', '.ga', '.cf', '.bid', '.win', '.download', '.pro', '.work']
-    for tld in suspicious_tlds:
-        if tld in url:
-            return True
-    return False
+    suspicious_tlds = ['.xyz', '.top', '.club', '.online', '.site', '.pw', '.cc', '.tk', '.ml', '.ga', '.cf', '.bid', '.win']
+    return any(tld in url for tld in suspicious_tlds)
 
 def has_redirects(url):
-    try:
-        if 'redirect=' in url or 'url=' in url or 'return=' in url or 'next=' in url or 'goto=' in url:
-            return True
-    except:
-        pass
-    return False
+    redirects = ['redirect=', 'url=', 'return=', 'next=', 'goto=']
+    return any(redirect in url for redirect in redirects)
 
 def is_too_long(url):
     return len(url) > 200
 
 def has_brand_phishing(url):
-    brands = ['paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
-              'amazon', 'facebook', 'instagram', 'bank', 'sberbank',
-              'vtb', 'tinkoff', 'alfabank', 'yahoo', 'gmail']
+    brands = ['paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 'amazon', 'facebook', 'instagram', 'bank', 'sberbank', 'vtb', 'tinkoff', 'alfabank']
     try:
         url_lower = url.lower()
         for brand in brands:
             if brand in url_lower:
                 legitimate = ['paypal.com', 'google.com', 'apple.com', 'microsoft.com', 'amazon.com']
-                is_legitimate = any(l in url_lower for l in legitimate)
-                if not is_legitimate:
+                if not any(legit in url_lower for legit in legitimate):
                     return True
     except:
         pass
     return False
 
-def is_ip_with_port(url):  
+def is_ip_with_port(url):
     try:
         ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}:\d+')
-        return bool(ip_pattern.search(url))  # search() + try
+        return bool(ip_pattern.search(url))
     except:
         return False
 
-def is_ip_with_port(url):
-    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}:\d+')
-    return bool(ip_pattern.match(url))
-
 def has_suspicious_domain_pattern(url):
     try:
-        domain = url.split('/')[2].lower()
-        if ':' in domain:
-            domain = domain.split(':')[0]
-        if domain.count('-') > 3:
-            return True
-        if domain.count('.') > 4:
-            return True
-        if re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', domain):
-            return True
+        domain = url.split('/')[2].lower().split(':')[0]
+        return domain.count('-') > 3 or domain.count('.') > 4 or re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', domain)
     except:
-        pass
-    return False
+        return False
 
-# ========== ЗАГРУЗКА МОДЕЛИ ==========
+# ========== ЗАГРУЗКА МОДЕЛИ (Render-совместимая) ==========
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
+model = None
+features_df = None
+feature_columns = []
+
+# Сначала пробуем модель
 try:
-    features_df = pd.read_csv('data/processed/url_dataset_features.csv')
-    feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
-    print(f"Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
-    model = joblib.load('ml/model.pkl')
-    print("Модель успешно загружена", file=sys.stderr)
+    if os.path.exists('ml/model.pkl'):
+        model = joblib.load('ml/model.pkl')
+        print("✅ Модель загружена", file=sys.stderr)
+    else:
+        print("⚠️ ml/model.pkl не найден", file=sys.stderr)
 except Exception as e:
-    print(f"Ошибка загрузки модели: {e}", file=sys.stderr)
-    features_df = None
-    feature_columns = []
+    print(f"⚠️ Ошибка загрузки модели: {e}", file=sys.stderr)
     model = None
 
+# Потом датасет (опционально)
+try:
+    if os.path.exists('data/processed/url_dataset_features.csv'):
+        features_df = pd.read_csv('data/processed/url_dataset_features.csv')
+        feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
+        print(f"✅ Датасет: {len(features_df)} записей, {len(feature_columns)} фич", file=sys.stderr)
+    else:
+        print("ℹ️ Датасет не найден, использую только эвристики", file=sys.stderr)
+except Exception as e:
+    print(f"⚠️ Ошибка загрузки датасета: {e}", file=sys.stderr)
+
+print("🚀 Сервер готов к работе!", file=sys.stderr)
 sys.stderr.flush()
 
-# ========== REDIS КЭШ ==========
+# ========== REDIS КЭШ (с fallback) ==========
 def get_cached(url):
-    try:
-        cached = redis_client.get(f"url:{url}")
-        if cached:
-            redis_client.incr('stats:hits')
-            return json.loads(cached)
-    except Exception as e:
-        print(f"Redis get error: {e}", file=sys.stderr)
-    redis_client.incr('stats:misses')
+    if redis_client:
+        try:
+            cached = redis_client.get(f"url:{url}")
+            if cached:
+                redis_client.incr('stats:hits')
+                return json.loads(cached)
+        except:
+            pass
+    redis_client.incr('stats:misses') if redis_client else None
     return None
 
 def set_cached(url, data):
-    try:
-        redis_client.setex(f"url:{url}", 3600, json.dumps(data))
-        print(f"Кэш сохранен в Redis: {url}", file=sys.stderr)
-    except Exception as e:
-        print(f"Redis set error: {e}", file=sys.stderr)
+    if redis_client:
+        try:
+            redis_client.setex(f"url:{url}", 3600, json.dumps(data))
+        except:
+            pass
 
 # ========== РОУТЫ ==========
 @app.route('/')
@@ -256,29 +211,31 @@ def index():
 def health():
     return jsonify({
         'status': 'ok',
-        'model_loaded': model is not None and features_df is not None
+        'model_loaded': model is not None,
+        'dataset_loaded': features_df is not None,
+        'redis_available': redis_client is not None
     })
 
 @app.route('/stats')
 def stats():
-    try:
-        hits = int(redis_client.get('stats:hits') or 0)
-        misses = int(redis_client.get('stats:misses') or 0)
-        total_urls = len(features_df) if features_df is not None else 0
-        return jsonify({
-            'cache_hits': hits,
-            'cache_misses': misses,
-            'hit_rate': round(hits/(hits+misses)*100, 1) if hits+misses > 0 else 0,
-            'dataset_size': total_urls,
-            'redis_info': redis_client.info('memory')
-        })
-    except:
-        return jsonify({'error': 'Stats unavailable'})
+    if redis_client:
+        try:
+            hits = int(redis_client.get('stats:hits') or 0)
+            misses = int(redis_client.get('stats:misses') or 0)
+            return jsonify({
+                'cache_hits': hits,
+                'cache_misses': misses,
+                'hit_rate': round(hits/(hits+misses)*100, 1) if hits+misses > 0 else 0,
+                'model_available': model is not None
+            })
+        except:
+            pass
+    return jsonify({'error': 'Stats unavailable'})
 
 @app.route('/check', methods=['POST'])
 def check_url():
     data = request.json
-    raw_url = data.get('url')
+    raw_url = data.get('url', '').strip()
     
     if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
@@ -293,7 +250,7 @@ def check_url():
             'score': 0,
             'explanations': [
                 'URL должен начинаться с http:// или https://',
-                'URL не должен содержать пробелов',
+                'URL не должен содержать пробелов или спецсимволов',
                 'Пример: https://google.com'
             ]
         }), 400
@@ -307,28 +264,24 @@ def check_url():
             'explanations': ['Локальные адреса (localhost, 192.168.x.x) не проверяются']
         })
     
+    # Проверяем кэш
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
     
-    try:
-        if model is None or features_df is None:
-            raise Exception("Модель не загружена")
-        
-        url_row = features_df[features_df['url'] == url]
-        
-        if url_row.empty:
-            print(f"Новый URL, использую эвристики: {url}", file=sys.stderr)
-            base_score = 0.3
-        else:
-            X = url_row[feature_columns]
-            score = model.predict_proba(X)[0][1]
-            base_score = float(score)
-            print(f"Модель дала score={base_score:.2f} для {url}", file=sys.stderr)
-        
-    except Exception as e:
-        print(f"Ошибка ML: {e}", file=sys.stderr)
-        base_score = 0.3
+    # ML предсказание (если возможно)
+    base_score = 0.3  # Базовый для новых URL
+    
+    if model and features_df is not None:
+        try:
+            url_row = features_df[features_df['url'] == url]
+            if not url_row.empty:
+                X = url_row[feature_columns]
+                score = model.predict_proba(X)[0][1]
+                base_score = float(score)
+                print(f"ML score={base_score:.2f} для {url}", file=sys.stderr)
+        except Exception as e:
+            print(f"ML ошибка: {e}", file=sys.stderr)
     
     score = base_score
     
@@ -367,53 +320,45 @@ def check_url():
     explanations = []
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
-    if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
-        explanations.append("Обнаружены подозрительные слова (login, verify, secure)")
-    if 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
-        explanations.append("Использован сервис сокращения ссылок")
-    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}')
-    if ip_pattern.match(url):
-        explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
+    if 'login' in url or 'verify' in url or 'secure' in url:
+        explanations.append("Обнаружены подозрительные слова")
+    if 'bit.ly' in url or 'goo.gl' in url:
+        explanations.append("Сервис сокращения ссылок")
+    if re.search(r'https?://(\d{1,3}\.){3}\d{1,3}', url):
+        explanations.append("IP-адрес вместо домена")
     if '@' in url:
-        explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+        explanations.append("Символ @ (может маскировать домен)")
     if has_homoglyphs(url):
-        explanations.append("Ссылка содержит символы, похожие на латиницу (омоглифы)")
+        explanations.append("Кириллические символы (омоглифы)")
     if has_encoding(url):
-        explanations.append("Ссылка содержит закодированные символы (%XX)")
+        explanations.append("Закодированные символы (%XX)")
     if has_suspicious_path(url):
-        explanations.append("В пути ссылки обнаружены подозрительные слова")
+        explanations.append("Подозрительный путь")
     if has_suspicious_params(url):
-        explanations.append("Ссылка содержит подозрительные параметры перенаправления")
+        explanations.append("Параметры перенаправления")
     if is_short_domain(url):
-        explanations.append("Домен слишком короткий (часто используется в фишинге)")
+        explanations.append("Слишком короткий домен")
     if has_numbers_in_domain(url):
-        explanations.append("Домен содержит много цифр (подозрительно)")
+        explanations.append("Много цифр в домене")
     if has_many_subdomains(url):
-        explanations.append("Слишком много поддоменов (попытка запутать)")
-    if is_typosquatting(url):
-        explanations.append("Ссылка имитирует домен известного сайта")
+        explanations.append("Много поддоменов")
     if is_suspicious_tld(url):
-        explanations.append("Использована подозрительная доменная зона")
-    if has_redirects(url):
-        explanations.append("Ссылка содержит параметры перенаправления")
-    if is_too_long(url):
-        explanations.append("Ссылка слишком длинная (более 200 символов)")
+        explanations.append("Подозрительная доменная зона")
     if has_brand_phishing(url):
-        explanations.append("Ссылка использует имя известного бренда для обмана")
+        explanations.append("Известный бренд в подозрительном контексте")
     if is_ip_with_port(url):
-        explanations.append("Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
-    if has_suspicious_domain_pattern(url):
-        explanations.append("Домен имеет подозрительную структуру (много дефисов или случайные символы)")
+        explanations.append("IP-адрес с портом")
     
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
     
     result = {
         'url': raw_url,
+        'normalized_url': url,
         'verdict': verdict,
         'verdict_text': verdict_text,
         'score': round(score * 100),
-        'explanations': explanations[:10]  # Максимум 10 объяснений
+        'explanations': explanations[:10]
     }
     
     set_cached(url, result)
@@ -422,31 +367,7 @@ def check_url():
 @app.route('/feedback', methods=['POST'])
 def feedback():
     data = request.json
-    
     os.makedirs('data', exist_ok=True)
-    conn = sqlite3.connect('data/feedback.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS feedbacks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT,
-            model_verdict TEXT,
-            user_verdict TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    cursor.execute(
-        'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
-        (data['url'], data['model_verdict'], data['user_verdict'])
-    )
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'status': 'ok'})
-
-@app.route('/admin/feedbacks')
-def admin_feedbacks():
     try:
         conn = sqlite3.connect('data/feedback.db')
         cursor = conn.cursor()
@@ -459,55 +380,61 @@ def admin_feedbacks():
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cursor.execute(
+            'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
+            (data.get('url'), data.get('model_verdict'), data.get('user_verdict'))
+        )
         conn.commit()
+        conn.close()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/feedbacks')
+def admin_feedbacks():
+    try:
+        conn = sqlite3.connect('data/feedback.db')
+        cursor = conn.cursor()
         cursor.execute('SELECT * FROM feedbacks ORDER BY timestamp DESC LIMIT 100')
         rows = cursor.fetchall()
         conn.close()
         
         if not rows:
-            return '''
-            <html><body>
-            <h1>Отзывы пользователей</h1>
-            <p>Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
-            <a href="/">На главную</a>
-            </body></html>
-            '''
+            return '<h1>Отзывов нет</h1><a href="/">Главная</a>'
         
         html = '''
-        <html><head><title>Отзывы</title>
         <style>
-            body { font-family: Arial; margin: 40px; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .match { color: green; }
-            .error { color: red; font-weight: bold; }
-            .url { max-width: 400px; word-break: break-all; }
-        </style></head>
-        <body>
+        body { font-family: Arial; margin: 40px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background: #f2f2f2; }
+        .match { color: green; }
+        .error { color: red; font-weight: bold; }
+        </style>
+        <h1>Отзывы ({len(rows)})</h1>
+        <table>
+        <tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>
         '''
-        html += f'<h1>Отзывы пользователей ({len(rows)})</h1>'
-        html += '<table><tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>'
         
         for row in rows:
-            match_style = 'match' if row[2] == row[3] else 'error'
-            url_short = row[1][:80] + '...' if len(row[1]) > 80 else row[1]
+            match_class = 'match' if row[2] == row[3] else 'error'
+            url_short = (row[1][:50] + '...') if len(row[1]) > 50 else row[1]
             html += f'''
             <tr>
                 <td>{row[0]}</td>
-                <td class="url"><a href="{row[1]}" target="_blank">{url_short}</a></td>
+                <td style="max-width:200px;word-break:break-all"><a href="{row[1]}" target="_blank">{url_short}</a></td>
                 <td>{row[2]}</td>
-                <td class="{match_style}">{row[3]}</td>
+                <td class="{match_class}">{row[3]}</td>
                 <td>{row[4]}</td>
             </tr>
             '''
         
-        html += '</table><br><a href="/">На главную</a></body></html>'
+        html += '</table><a href="/">Главная</a>'
         return html
         
     except Exception as e:
-        return f"<h1>Ошибка</h1><p>{str(e)}</p><a href='/'>На главную</a>", 500
+        return f"<h1>Ошибка: {e}</h1><a href='/'>Главная</a>"
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
