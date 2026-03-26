@@ -213,17 +213,27 @@ def has_suspicious_domain_pattern(url):
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
+# Замените блок try/except для ML на это:
 try:
-    features_df = pd.read_csv('data/processed/url_dataset_features.csv')
-    feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
-    print(f"Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
-    model = joblib.load('ml/model.pkl')
-    print("Модель успешно загружена", file=sys.stderr)
+    if model is None or features_df is None:
+        raise Exception("Модель не загружена")
+    
+    url_row = features_df[features_df['url'] == url]
+    
+    if url_row.empty:
+        # НОВЫЕ URL: генерируем базовый score из эвристик
+        print(f"Новый URL, использую эвристики: {url}", file=sys.stderr)
+        base_score = 0.3
+    else:
+        # ИЗ ДАТАСЕТА: используем модель
+        X = url_row[feature_columns]
+        score = model.predict_proba(X)[0][1]
+        base_score = float(score)
+        print(f"Модель дала score={base_score:.2f} для {url}", file=sys.stderr)
+        
 except Exception as e:
-    print(f"Ошибка загрузки модели: {e}", file=sys.stderr)
-    features_df = None
-    feature_columns = []
-    model = None
+    print(f"Ошибка ML: {e}", file=sys.stderr)
+    base_score = 0.3
 
 sys.stderr.flush()
 
@@ -483,24 +493,36 @@ def admin_feedbacks():
             </body></html>
             '''
         
-        html = '<h1>📋 Отзывы пользователей</h1>'
-        html += f'<p>Всего отзывов: {len(rows)}</p>'
-        html += '<table border="1" cellpadding="5">'
-        html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> 项'
+        html = '''
+        <html><head><title>Отзывы</title>
+        <style>
+            body { font-family: Arial; margin: 40px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .match { color: green; }
+            .error { color: red; font-weight: bold; }
+            .url { max-width: 400px; word-break: break-all; }
+        </style></head>
+        <body>
+        '''
+        html += f'<h1>📋 Отзывы пользователей ({len(rows)})</h1>'
+        html += '<table><tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>'
         
         for row in rows:
-            match_style = 'color: green;' if row[2] == row[3] else 'color: red; font-weight: bold;'
+            match_style = 'match' if row[2] == row[3] else 'error'
+            url_short = row[1][:80] + '...' if len(row[1]) > 80 else row[1]
             html += f'''
             <tr>
-                <td>{row[0]}项
-                <td style="word-break: break-all; max-width: 400px;">{row[1][:80]}{'...' if len(row[1]) > 80 else ''}项
-                <td>{row[2]}项
-                <td style="{match_style}">{row[3]}项
-                <td>{row[4]}项
-             '
+                <td>{row[0]}</td>
+                <td class="url"><a href="{row[1]}" target="_blank">{url_short}</a></td>
+                <td>{row[2]}</td>
+                <td class="{match_style}">{row[3]}</td>
+                <td>{row[4]}</td>
+            </tr>
             '''
         
-        html += '赶<a href="/">На главную</a>'
+        html += '</table><br><a href="/">← На главную</a></body></html>'
         return html
         
     except Exception as e:
