@@ -3,7 +3,6 @@ import json
 import sqlite3
 import os
 import re
-import unicodedata
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
@@ -32,15 +31,23 @@ def is_valid_url(url):
     if ' ' in url:
         return False
     try:
-        domain = url.split('/')[2]
-        if '.' not in domain:
+        domain_part = url.split('/')[2]
+        if ':' in domain_part:
+            domain_part = domain_part.split(':')[0]
+        
+        if '.' not in domain_part:
             return False
+        
+        ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
+        if ip_pattern.match(domain_part):
+            return True
+        
         invalid_chars = [',', ';', '|', '\\', '^', '`', '[', ']', '{', '}', '<', '>', '"', "'"]
         for char in invalid_chars:
-            if char in domain:
+            if char in domain_part:
                 return False
         domain_pattern = re.compile(r'^[a-z0-9.-]+$')
-        if not domain_pattern.match(domain):
+        if not domain_pattern.match(domain_part):
             return False
     except:
         return False
@@ -82,6 +89,8 @@ def has_suspicious_params(url):
 def is_short_domain(url):
     try:
         domain = url.split('/')[2]
+        if ':' in domain:
+            domain = domain.split(':')[0]
         main_part = domain.split('.')[0]
         return len(main_part) <= 3
     except:
@@ -90,6 +99,8 @@ def is_short_domain(url):
 def has_numbers_in_domain(url):
     try:
         domain = url.split('/')[2]
+        if ':' in domain:
+            domain = domain.split(':')[0]
         digits = sum(c.isdigit() for c in domain)
         return digits > 5
     except:
@@ -98,6 +109,8 @@ def has_numbers_in_domain(url):
 def has_many_subdomains(url):
     try:
         domain = url.split('/')[2]
+        if ':' in domain:
+            domain = domain.split(':')[0]
         subdomains = domain.split('.')[:-2]
         return len(subdomains) > 3
     except:
@@ -119,6 +132,8 @@ def is_typosquatting(url):
     popular_domains = ['google', 'facebook', 'youtube', 'vk', 'mail', 'yandex', 'gmail', 'yahoo', 'instagram', 'twitter', 'whatsapp', 'telegram', 'github']
     try:
         domain = url.split('/')[2].lower()
+        if ':' in domain:
+            domain = domain.split(':')[0]
         for popular in popular_domains:
             if popular in domain and popular != domain:
                 if len(domain) > len(popular) + 1:
@@ -148,10 +163,7 @@ def has_redirects(url):
 def is_too_long(url):
     return len(url) > 200
 
-# ========== НОВЫЕ ПРОВЕРКИ ДЛЯ ФИШИНГА ==========
-
 def has_brand_phishing(url):
-    """Проверяет наличие известных брендов в фишинговом контексте"""
     brands = [
         'paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
         'amazon', 'facebook', 'instagram', 'bank', 'secure',
@@ -170,21 +182,18 @@ def has_brand_phishing(url):
     return False
 
 def is_ip_with_port(url):
-    """Проверяет, является ли URL IP-адресом с портом"""
-    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}(:\d+)?')
+    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}:\d+')
     return bool(ip_pattern.match(url))
 
 def has_suspicious_domain_pattern(url):
-    """Проверяет подозрительные паттерны в домене"""
     try:
         domain = url.split('/')[2].lower()
-        # Много дефисов
+        if ':' in domain:
+            domain = domain.split(':')[0]
         if domain.count('-') > 3:
             return True
-        # Много точек
         if domain.count('.') > 4:
             return True
-        # Случайная строка (много согласных подряд)
         if re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', domain):
             return True
     except:
@@ -199,11 +208,11 @@ sys.stderr.flush()
 try:
     features_df = pd.read_csv('data/processed/url_dataset_features.csv')
     feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
-    print(f"✅ Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
+    print(f"Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
     model = joblib.load('ml/model.pkl')
-    print("✅ Model loaded successfully", file=sys.stderr)
+    print("Модель успешно загружена", file=sys.stderr)
 except Exception as e:
-    print(f"❌ Error loading features or model: {e}", file=sys.stderr)
+    print(f"Ошибка загрузки модели: {e}", file=sys.stderr)
     features_df = None
     feature_columns = []
     model = None
@@ -280,7 +289,7 @@ def check_url():
         url_row = features_df[features_df['url'] == url]
         
         if url_row.empty:
-            print(f"⚠️ URL не найден в датасете: {url}", file=sys.stderr)
+            print(f"URL не найден в датасете: {url}", file=sys.stderr)
             score = 0.3
             if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
                 score = 0.8
@@ -289,45 +298,44 @@ def check_url():
         else:
             X = url_row[feature_columns]
             score = model.predict_proba(X)[0][1]
-            print(f"✅ Предсказание для {url}: score={score:.2f}", file=sys.stderr)
+            print(f"Предсказание для {url}: score={score:.2f}", file=sys.stderr)
         
     except Exception as e:
-        print(f"⚠️ Ошибка при анализе URL {url}: {e}", file=sys.stderr)
+        print(f"Ошибка при анализе URL {url}: {e}", file=sys.stderr)
         score = 0.3
         if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
             score = 0.8
         elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
             score = 0.6
     
-    # ===== КОРРЕКТИРОВКА SCORE ДЛЯ ЯВНО ПОДОЗРИТЕЛЬНЫХ СЛУЧАЕВ =====
+    # Корректировка score для подозрительных случаев
     if score < 0.4:
         if has_numbers_in_domain(url):
             score = 0.45
-            print(f"🔧 Повышаю score из-за цифр в домене: {url}", file=sys.stderr)
+            print(f"Повышаю score из-за цифр в домене: {url}", file=sys.stderr)
         elif is_short_domain(url):
             score = 0.45
-            print(f"🔧 Повышаю score из-за короткого домена: {url}", file=sys.stderr)
+            print(f"Повышаю score из-за короткого домена: {url}", file=sys.stderr)
         elif has_many_subdomains(url):
             score = 0.45
-            print(f"🔧 Повышаю score из-за множества поддоменов: {url}", file=sys.stderr)
+            print(f"Повышаю score из-за множества поддоменов: {url}", file=sys.stderr)
         elif is_suspicious_tld(url):
             score = 0.45
-            print(f"🔧 Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
+            print(f"Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
     
-    # ===== НОВЫЕ КОРРЕКТИРОВКИ =====
     if has_brand_phishing(url) and score < 0.6:
         score = 0.65
-        print(f"🔧 Повышаю score из-за бренда в фишинговом контексте: {url}", file=sys.stderr)
+        print(f"Повышаю score из-за бренда в фишинговом контексте: {url}", file=sys.stderr)
     
     if is_ip_with_port(url):
         score = 0.8
-        print(f"🔧 Повышаю score из-за IP с портом: {url}", file=sys.stderr)
+        print(f"Повышаю score из-за IP с портом: {url}", file=sys.stderr)
     
     if has_suspicious_domain_pattern(url) and score < 0.5:
         score = 0.55
-        print(f"🔧 Повышаю score из-за подозрительного паттерна домена: {url}", file=sys.stderr)
+        print(f"Повышаю score из-за подозрительного паттерна домена: {url}", file=sys.stderr)
     
-    # ===== ВЕРДИКТ =====
+    # Вердикт на основе score
     if score > 0.7:
         verdict = "dangerous"
         verdict_text = "🔴 ОПАСНО"
@@ -338,7 +346,7 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # ===== ОБЪЯСНЕНИЯ =====
+    # Объяснения
     explanations = []
     
     if not url.startswith('https'):
@@ -390,15 +398,14 @@ def check_url():
     if is_too_long(url):
         explanations.append("Ссылка слишком длинная (более 200 символов)")
     
-    # НОВЫЕ ОБЪЯСНЕНИЯ
     if has_brand_phishing(url):
-        explanations.append("⚠️ Ссылка использует имя известного бренда для обмана")
+        explanations.append("Ссылка использует имя известного бренда для обмана")
     
     if is_ip_with_port(url):
-        explanations.append("⚠️ Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
+        explanations.append("Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
     
     if has_suspicious_domain_pattern(url):
-        explanations.append("⚠️ Домен имеет подозрительную структуру (много дефисов или случайные символы)")
+        explanations.append("Домен имеет подозрительную структуру (много дефисов или случайные символы)")
     
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
@@ -482,7 +489,7 @@ def admin_feedbacks():
                 <td>{row[2]}项
                 <td style="{match_style}">{row[3]}项
                 <td>{row[4]}项
-            </tr>
+             '
             '''
         
         html += '赶<a href="/">На главную</a>'
