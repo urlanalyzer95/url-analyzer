@@ -87,8 +87,9 @@ def has_suspicious_params(url):
 def is_short_domain(url):
     """Проверяет, что домен очень короткий (подозрительно)"""
     try:
-        domain = url.split('/')[2].split('.')[0]
-        return len(domain) <= 3
+        domain = url.split('/')[2]
+        main_part = domain.split('.')[0]
+        return len(main_part) <= 3
     except:
         return False
 
@@ -263,6 +264,23 @@ def check_url():
         elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
             score = 0.6
     
+    # ===== КОРРЕКТИРОВКА SCORE ДЛЯ ЯВНО ПОДОЗРИТЕЛЬНЫХ СЛУЧАЕВ =====
+    # Если URL не найден в датасете (score 0.3), но есть явные признаки
+    if score < 0.4:
+        if has_numbers_in_domain(url):
+            score = 0.45
+            print(f"🔧 Повышаю score из-за цифр в домене: {url}", file=sys.stderr)
+        elif is_short_domain(url):
+            score = 0.45
+            print(f"🔧 Повышаю score из-за короткого домена: {url}", file=sys.stderr)
+        elif has_many_subdomains(url):
+            score = 0.45
+            print(f"🔧 Повышаю score из-за множества поддоменов: {url}", file=sys.stderr)
+        elif is_suspicious_tld(url):
+            score = 0.45
+            print(f"🔧 Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
+    
+    # ===== ВЕРДИКТ ТОЛЬКО НА ОСНОВЕ SCORE =====
     if score > 0.7:
         verdict = "dangerous"
         verdict_text = "🔴 ОПАСНО"
@@ -273,9 +291,9 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
+    # ===== ОБЪЯСНЕНИЯ (НЕ ВЛИЯЮТ НА ВЕРДИКТ) =====
     explanations = []
     
-    # Основные проверки
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
     
@@ -292,7 +310,6 @@ def check_url():
     if '@' in url:
         explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
     
-    # НОВЫЕ ПРОВЕРКИ
     if has_homoglyphs(url):
         explanations.append("Ссылка содержит символы, похожие на латиницу (омоглифы)")
     
@@ -398,7 +415,7 @@ def admin_feedbacks():
         html = '<h1>📋 Отзывы пользователей</h1>'
         html += f'<p>Всего отзывов: {len(rows)}</p>'
         html += '<table border="1" cellpadding="5">'
-        html += '<tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>'
+        html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> </tr>'
         
         for row in rows:
             match_style = 'color: green;' if row[2] == row[3] else 'color: red; font-weight: bold;'
