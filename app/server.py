@@ -1,4 +1,3 @@
-import sys
 import json
 import sqlite3
 import os
@@ -87,11 +86,18 @@ def has_suspicious_params(url):
     return False
 
 def is_short_domain(url):
+    """Проверяет, что домен очень короткий (подозрительно)"""
     try:
         domain = url.split('/')[2]
         if ':' in domain:
             domain = domain.split(':')[0]
         main_part = domain.split('.')[0]
+        
+        # Легитимные короткие домены (не считать подозрительными)
+        legitimate_short = ['ya', 'vk', 'ok', 'fb', 'gg', 'go', 'im', 'tv', 'io', 'ru', 'com']
+        if main_part in legitimate_short:
+            return False
+            
         return len(main_part) <= 3
     except:
         return False
@@ -164,10 +170,11 @@ def is_too_long(url):
     return len(url) > 200
 
 def has_brand_phishing(url):
+    """Проверяет наличие известных брендов в фишинговом контексте"""
     brands = [
         'paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
-        'amazon', 'facebook', 'instagram', 'bank', 'secure',
-        'confirm', 'update', 'verify', 'account', 'login'
+        'amazon', 'facebook', 'instagram', 'bank', 'sberbank',
+        'vtb', 'tinkoff', 'alfabank', 'yahoo', 'gmail'
     ]
     try:
         url_lower = url.lower()
@@ -323,8 +330,8 @@ def check_url():
             score = 0.45
             print(f"Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
     
-    if has_brand_phishing(url) and score < 0.6:
-        score = 0.65
+    if has_brand_phishing(url) and score < 0.7:
+        score = 0.75
         print(f"Повышаю score из-за бренда в фишинговом контексте: {url}", file=sys.stderr)
     
     if is_ip_with_port(url):
