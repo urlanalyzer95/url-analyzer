@@ -7,14 +7,17 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import joblib
+import redis
 
 print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
 
-# ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
+# Redis подключение
+redis_client = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
 
+# ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -53,8 +56,7 @@ def is_valid_url(url):
         return False
     return True
 
-# ========== ПРОВЕРКИ ==========
-
+# ========== ЭВРИСТИКИ ==========
 def has_homoglyphs(url):
     dangerous_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']
     for char in url.lower():
@@ -87,18 +89,14 @@ def has_suspicious_params(url):
     return False
 
 def is_short_domain(url):
-    """Проверяет, что домен очень короткий (подозрительно)"""
     try:
         domain = url.split('/')[2]
         if ':' in domain:
             domain = domain.split(':')[0]
         main_part = domain.split('.')[0]
-        
-        # Легитимные короткие домены (не считать подозрительными)
         legitimate_short = ['ya', 'vk', 'ok', 'fb', 'gg', 'go', 'im', 'tv', 'io', 'ru', 'com']
         if main_part in legitimate_short:
             return False
-            
         return len(main_part) <= 3
     except:
         return False
@@ -171,7 +169,6 @@ def is_too_long(url):
     return len(url) > 200
 
 def has_brand_phishing(url):
-    """Проверяет наличие известных брендов в фишинговом контексте"""
     brands = [
         'paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
         'amazon', 'facebook', 'instagram', 'bank', 'sberbank',
@@ -209,50 +206,43 @@ def has_suspicious_domain_pattern(url):
     return False
 
 # ========== ЗАГРУЗКА МОДЕЛИ ==========
-
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
-# Замените блок try/except для ML на это:
 try:
-    if model is None or features_df is None:
-        raise Exception("Модель не загружена")
-    
-    url_row = features_df[features_df['url'] == url]
-    
-    if url_row.empty:
-        # НОВЫЕ URL: генерируем базовый score из эвристик
-        print(f"Новый URL, использую эвристики: {url}", file=sys.stderr)
-        base_score = 0.3
-    else:
-        # ИЗ ДАТАСЕТА: используем модель
-        X = url_row[feature_columns]
-        score = model.predict_proba(X)[0][1]
-        base_score = float(score)
-        print(f"Модель дала score={base_score:.2f} для {url}", file=sys.stderr)
-        
+    features_df = pd.read_csv('data/processed/url_dataset_features.csv')
+    feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
+    print(f"Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
+    model = joblib.load('ml/model.pkl')
+    print("Модель успешно загружена", file=sys.stderr)
 except Exception as e:
-    print(f"Ошибка ML: {e}", file=sys.stderr)
-    base_score = 0.3
+    print(f"Ошибка загрузки модели: {e}", file=sys.stderr)
+    features_df = None
+    feature_columns = []
+    model = None
 
 sys.stderr.flush()
 
-cache = {}
-
+# ========== REDIS КЭШ ==========
 def get_cached(url):
-    if url in cache:
-        data, timestamp = cache[url]
-        if datetime.now() - timestamp < timedelta(hours=1):
-            return data
-        else:
-            del cache[url]
+    try:
+        cached = redis_client.get(f"url:{url}")
+        if cached:
+            redis_client.incr('stats:hits')
+            return json.loads(cached)
+    except Exception as e:
+        print(f"Redis get error: {e}", file=sys.stderr)
+    redis_client.incr('stats:misses')
     return None
 
 def set_cached(url, data):
-    cache[url] = (data, datetime.now())
+    try:
+        redis_client.setex(f"url:{url}", 3600, json.dumps(data))
+        print(f"Кэш сохранен в Redis: {url}", file=sys.stderr)
+    except Exception as e:
+        print(f"Redis set error: {e}", file=sys.stderr)
 
 # ========== РОУТЫ ==========
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -263,6 +253,22 @@ def health():
         'status': 'ok',
         'model_loaded': model is not None and features_df is not None
     })
+
+@app.route('/stats')
+def stats():
+    try:
+        hits = int(redis_client.get('stats:hits') or 0)
+        misses = int(redis_client.get('stats:misses') or 0)
+        total_urls = len(features_df) if features_df is not None else 0
+        return jsonify({
+            'cache_hits': hits,
+            'cache_misses': misses,
+            'hit_rate': round(hits/(hits+misses)*100, 1) if hits+misses > 0 else 0,
+            'dataset_size': total_urls,
+            'redis_info': redis_client.info('memory')
+        })
+    except:
+        return jsonify({'error': 'Stats unavailable'})
 
 @app.route('/check', methods=['POST'])
 def check_url():
@@ -278,7 +284,7 @@ def check_url():
         return jsonify({
             'url': raw_url,
             'verdict': 'invalid',
-            'verdict_text': '❌ НЕВАЛИДНЫЙ URL',
+            'verdict_text': 'НЕВАЛИДНЫЙ URL',
             'score': 0,
             'explanations': [
                 'URL должен начинаться с http:// или https://',
@@ -291,7 +297,7 @@ def check_url():
         return jsonify({
             'url': url,
             'verdict': 'warning',
-            'verdict_text': '⚠️ ЛОКАЛЬНЫЙ АДРЕС',
+            'verdict_text': 'ЛОКАЛЬНЫЙ АДРЕС',
             'score': 0,
             'explanations': ['Локальные адреса (localhost, 192.168.x.x) не проверяются']
         })
@@ -302,126 +308,95 @@ def check_url():
     
     try:
         if model is None or features_df is None:
-            raise Exception("Модель или признаки не загружены")
+            raise Exception("Модель не загружена")
         
         url_row = features_df[features_df['url'] == url]
         
         if url_row.empty:
-            print(f"URL не найден в датасете: {url}", file=sys.stderr)
-            score = 0.3
-            if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
-                score = 0.8
-            elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
-                score = 0.6
+            print(f"Новый URL, использую эвристики: {url}", file=sys.stderr)
+            base_score = 0.3
         else:
             X = url_row[feature_columns]
             score = model.predict_proba(X)[0][1]
-            print(f"Предсказание для {url}: score={score:.2f}", file=sys.stderr)
+            base_score = float(score)
+            print(f"Модель дала score={base_score:.2f} для {url}", file=sys.stderr)
         
     except Exception as e:
-        print(f"Ошибка при анализе URL {url}: {e}", file=sys.stderr)
-        score = 0.3
-        if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
-            score = 0.8
-        elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
-            score = 0.6
+        print(f"Ошибка ML: {e}", file=sys.stderr)
+        base_score = 0.3
     
-    # Корректировка score для подозрительных случаев
+    score = base_score
+    
+    # Корректировка эвристиками
     if score < 0.4:
         if has_numbers_in_domain(url):
             score = 0.45
-            print(f"Повышаю score из-за цифр в домене: {url}", file=sys.stderr)
         elif is_short_domain(url):
             score = 0.45
-            print(f"Повышаю score из-за короткого домена: {url}", file=sys.stderr)
         elif has_many_subdomains(url):
             score = 0.45
-            print(f"Повышаю score из-за множества поддоменов: {url}", file=sys.stderr)
         elif is_suspicious_tld(url):
             score = 0.45
-            print(f"Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
     
     if has_brand_phishing(url) and score < 0.7:
         score = 0.75
-        print(f"Повышаю score из-за бренда в фишинговом контексте: {url}", file=sys.stderr)
     
     if is_ip_with_port(url):
         score = 0.8
-        print(f"Повышаю score из-за IP с портом: {url}", file=sys.stderr)
     
     if has_suspicious_domain_pattern(url) and score < 0.5:
         score = 0.55
-        print(f"Повышаю score из-за подозрительного паттерна домена: {url}", file=sys.stderr)
     
-    # Вердикт на основе score
+    # Вердикт
     if score > 0.7:
         verdict = "dangerous"
-        verdict_text = "🔴 ОПАСНО"
+        verdict_text = "ОПАСНО"
     elif score > 0.4:
         verdict = "suspicious"
-        verdict_text = "🟡 ПОДОЗРИТЕЛЬНО"
+        verdict_text = "ПОДОЗРИТЕЛЬНО"
     else:
         verdict = "safe"
-        verdict_text = "🟢 БЕЗОПАСНО"
+        verdict_text = "БЕЗОПАСНО"
     
     # Объяснения
     explanations = []
-    
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
-    
     if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
         explanations.append("Обнаружены подозрительные слова (login, verify, secure)")
-    
     if 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
         explanations.append("Использован сервис сокращения ссылок")
-    
     ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}')
     if ip_pattern.match(url):
         explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
-    
     if '@' in url:
         explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
-    
     if has_homoglyphs(url):
         explanations.append("Ссылка содержит символы, похожие на латиницу (омоглифы)")
-    
     if has_encoding(url):
         explanations.append("Ссылка содержит закодированные символы (%XX)")
-    
     if has_suspicious_path(url):
         explanations.append("В пути ссылки обнаружены подозрительные слова")
-    
     if has_suspicious_params(url):
         explanations.append("Ссылка содержит подозрительные параметры перенаправления")
-    
     if is_short_domain(url):
         explanations.append("Домен слишком короткий (часто используется в фишинге)")
-    
     if has_numbers_in_domain(url):
         explanations.append("Домен содержит много цифр (подозрительно)")
-    
     if has_many_subdomains(url):
         explanations.append("Слишком много поддоменов (попытка запутать)")
-    
     if is_typosquatting(url):
         explanations.append("Ссылка имитирует домен известного сайта")
-    
     if is_suspicious_tld(url):
         explanations.append("Использована подозрительная доменная зона")
-    
     if has_redirects(url):
         explanations.append("Ссылка содержит параметры перенаправления")
-    
     if is_too_long(url):
         explanations.append("Ссылка слишком длинная (более 200 символов)")
-    
     if has_brand_phishing(url):
         explanations.append("Ссылка использует имя известного бренда для обмана")
-    
     if is_ip_with_port(url):
         explanations.append("Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
-    
     if has_suspicious_domain_pattern(url):
         explanations.append("Домен имеет подозрительную структуру (много дефисов или случайные символы)")
     
@@ -433,7 +408,7 @@ def check_url():
         'verdict': verdict,
         'verdict_text': verdict_text,
         'score': round(score * 100),
-        'explanations': explanations
+        'explanations': explanations[:10]  # Максимум 10 объяснений
     }
     
     set_cached(url, result)
@@ -487,8 +462,8 @@ def admin_feedbacks():
         if not rows:
             return '''
             <html><body>
-            <h1>📋 Отзывы пользователей</h1>
-            <p>📭 Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
+            <h1>Отзывы пользователей</h1>
+            <p>Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
             <a href="/">На главную</a>
             </body></html>
             '''
@@ -506,7 +481,7 @@ def admin_feedbacks():
         </style></head>
         <body>
         '''
-        html += f'<h1>📋 Отзывы пользователей ({len(rows)})</h1>'
+        html += f'<h1>Отзывы пользователей ({len(rows)})</h1>'
         html += '<table><tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>'
         
         for row in rows:
@@ -522,7 +497,7 @@ def admin_feedbacks():
             </tr>
             '''
         
-        html += '</table><br><a href="/">← На главную</a></body></html>'
+        html += '</table><br><a href="/">На главную</a></body></html>'
         return html
         
     except Exception as e:
