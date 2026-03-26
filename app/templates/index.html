@@ -87,7 +87,8 @@
                 explanationsBox.innerHTML =
                   "<div class='expl-list'><ul>" +
                   data.explanations.map((exp) => `<li>${exp}</li>`).join("") +
-                  "</ul></div>";
+                  "</ul></div>" +
+                  `<button class="feedback-btn" onclick="sendFeedback('${data.verdict}')">📝 Сообщить об ошибке</button>`;
               }
             }
           } catch (error) {
@@ -101,6 +102,25 @@
             btnCheck.classList.remove("disabled");
           }
         });
+
+      // Функция обратной связи
+      async function sendFeedback(modelVerdict) {
+        const url = document.getElementById("urlInput").value;
+        const userVerdict = prompt("Как правильно классифицировать эту ссылку?\nопасно / подозрительно / безопасно");
+
+        if (userVerdict) {
+          await fetch("/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: url,
+              model_verdict: modelVerdict,
+              user_verdict: userVerdict,
+            }),
+          });
+          alert("✅ Спасибо! Это поможет улучшить анализатор.");
+        }
+      }
     </script>
   </body>
 </html>
