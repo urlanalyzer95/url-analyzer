@@ -3,6 +3,7 @@ import json
 import sqlite3
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
@@ -12,6 +13,8 @@ print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
+
+# ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 
 def normalize_url(url):
     url = url.strip()
@@ -44,6 +47,69 @@ def is_valid_url(url):
         return False
     return True
 
+# ========== НОВЫЕ ПРОВЕРКИ ==========
+
+def has_homoglyphs(url):
+    """Проверяет наличие омоглифов (символов, похожих на латиницу)"""
+    dangerous_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']  # кириллица, похожая на латиницу
+    for char in url.lower():
+        if char in dangerous_chars:
+            return True
+    return False
+
+def has_encoding(url):
+    """Проверяет наличие %XX кодирования"""
+    return bool(re.search(r'%[0-9A-Fa-f]{2}', url))
+
+def has_suspicious_path(url):
+    """Проверяет наличие подозрительных слов в пути"""
+    suspicious_paths = ['login', 'verify', 'secure', 'account', 'banking', 'payment', 'update', 'confirm']
+    try:
+        path_parts = url.split('/')[3:]  # после домена
+        for part in path_parts:
+            for word in suspicious_paths:
+                if word in part.lower():
+                    return True
+    except:
+        pass
+    return False
+
+def has_suspicious_params(url):
+    """Проверяет наличие подозрительных GET-параметров"""
+    suspicious_params = ['redirect', 'url', 'return', 'next', 'goto', 'target', 'redir']
+    if '?' in url:
+        params = url.split('?')[1]
+        for param in suspicious_params:
+            if param + '=' in params.lower():
+                return True
+    return False
+
+def is_short_domain(url):
+    """Проверяет, что домен очень короткий (подозрительно)"""
+    try:
+        domain = url.split('/')[2].split('.')[0]
+        return len(domain) <= 3
+    except:
+        return False
+
+def has_numbers_in_domain(url):
+    """Проверяет, содержит ли домен много цифр"""
+    try:
+        domain = url.split('/')[2]
+        digits = sum(c.isdigit() for c in domain)
+        return digits > 5
+    except:
+        return False
+
+def has_many_subdomains(url):
+    """Проверяет количество поддоменов"""
+    try:
+        domain = url.split('/')[2]
+        subdomains = domain.split('.')[:-2]  # без TLD и второго уровня
+        return len(subdomains) > 3
+    except:
+        return False
+
 def is_localhost(url):
     local_patterns = [
         r'localhost',
@@ -57,7 +123,7 @@ def is_localhost(url):
     return False
 
 def is_typosquatting(url):
-    popular_domains = ['google', 'facebook', 'youtube', 'vk', 'mail', 'yandex', 'gmail', 'yahoo']
+    popular_domains = ['google', 'facebook', 'youtube', 'vk', 'mail', 'yandex', 'gmail', 'yahoo', 'instagram', 'twitter', 'whatsapp', 'telegram', 'github']
     try:
         domain = url.split('/')[2].lower()
         for popular in popular_domains:
@@ -72,7 +138,7 @@ def is_typosquatting(url):
     return False
 
 def is_suspicious_tld(url):
-    suspicious_tlds = ['.xyz', '.top', '.club', '.online', '.site', '.pw', '.cc', '.tk', '.ml', '.ga', '.cf']
+    suspicious_tlds = ['.xyz', '.top', '.club', '.online', '.site', '.pw', '.cc', '.tk', '.ml', '.ga', '.cf', '.bid', '.win', '.download', '.pro', '.work']
     for tld in suspicious_tlds:
         if tld in url:
             return True
@@ -88,6 +154,8 @@ def has_redirects(url):
 
 def is_too_long(url):
     return len(url) > 200
+
+# ========== ЗАГРУЗКА МОДЕЛИ ==========
 
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
@@ -119,6 +187,8 @@ def get_cached(url):
 
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
+
+# ========== РОУТЫ ==========
 
 @app.route('/')
 def index():
@@ -205,6 +275,7 @@ def check_url():
     
     explanations = []
     
+    # Основные проверки
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
     
@@ -219,7 +290,29 @@ def check_url():
         explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
     
     if '@' in url:
-        explanations.append("Ссылка содержит символ @ (может использоваться для обмана")
+        explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+    
+    # НОВЫЕ ПРОВЕРКИ
+    if has_homoglyphs(url):
+        explanations.append("Ссылка содержит символы, похожие на латиницу (омоглифы)")
+    
+    if has_encoding(url):
+        explanations.append("Ссылка содержит закодированные символы (%XX)")
+    
+    if has_suspicious_path(url):
+        explanations.append("В пути ссылки обнаружены подозрительные слова")
+    
+    if has_suspicious_params(url):
+        explanations.append("Ссылка содержит подозрительные параметры перенаправления")
+    
+    if is_short_domain(url):
+        explanations.append("Домен слишком короткий (часто используется в фишинге)")
+    
+    if has_numbers_in_domain(url):
+        explanations.append("Домен содержит много цифр (подозрительно)")
+    
+    if has_many_subdomains(url):
+        explanations.append("Слишком много поддоменов (попытка запутать)")
     
     if is_typosquatting(url):
         explanations.append("Ссылка имитирует домен известного сайта")
@@ -254,8 +347,6 @@ def feedback():
     os.makedirs('data', exist_ok=True)
     conn = sqlite3.connect('data/feedback.db')
     cursor = conn.cursor()
-    
-    # Создаём таблицу, если её нет (это здесь единственное место)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS feedbacks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -266,8 +357,6 @@ def feedback():
         )
     ''')
     conn.commit()
-    
-    # Сохраняем отзыв
     cursor.execute(
         'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
         (data['url'], data['model_verdict'], data['user_verdict'])
@@ -276,30 +365,58 @@ def feedback():
     conn.close()
     
     return jsonify({'status': 'ok'})
-    
+
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
+    """Показывает все отзывы пользователей"""
     try:
         conn = sqlite3.connect('data/feedback.db')
         cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feedbacks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT,
+                model_verdict TEXT,
+                user_verdict TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
         cursor.execute('SELECT * FROM feedbacks ORDER BY timestamp DESC LIMIT 100')
         rows = cursor.fetchall()
         conn.close()
-
-        # Простой вывод без сложного форматирования
-        html = '<h1>Отзывы пользователей</h1>'
+        
         if not rows:
-            html += '<p>Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>'
-        else:
-            html += f'<p>Всего отзывов: {len(rows)}</p>'
-            html += '<ul>'
-            for row in rows:
-                html += f'<li><b>{row[4]}</b> | URL: {row[1][:50]} | Модель: {row[2]} | Пользователь: {row[3]}</li>'
-            html += '</ul>'
-        html += '<p><a href="/">На главную</a></p>'
+            return '''
+            <html><body>
+            <h1>📋 Отзывы пользователей</h1>
+            <p>📭 Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
+            <a href="/">На главную</a>
+            </body></html>
+            '''
+        
+        html = '<h1>📋 Отзывы пользователей</h1>'
+        html += f'<p>Всего отзывов: {len(rows)}</p>'
+        html += '<table border="1" cellpadding="5">'
+        html += '<tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>'
+        
+        for row in rows:
+            match_style = 'color: green;' if row[2] == row[3] else 'color: red; font-weight: bold;'
+            html += f'''
+            <tr>
+                <td>{row[0]}</td>
+                <td style="word-break: break-all; max-width: 400px;">{row[1][:80]}{'...' if len(row[1]) > 80 else ''}</td>
+                <td>{row[2]}</td>
+                <td style="{match_style}">{row[3]}</td>
+                <td>{row[4]}</td>
+            </tr>
+            '''
+        
+        html += '</table><p><a href="/">На главную</a></p>'
         return html
+        
     except Exception as e:
-        return f'<h1>Ошибка</h1><p>{str(e)}</p><p><a href="/">На главную</a></p>', 500
+        return f"<h1>Ошибка</h1><p>{str(e)}</p><a href='/'>На главную</a>", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
