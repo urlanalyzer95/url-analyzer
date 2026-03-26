@@ -7,20 +7,11 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import joblib
-import redis
 
 print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
-
-# Redis подключение (с fallback)
-try:
-    redis_client = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
-    print("✅ Redis подключен", file=sys.stderr)
-except:
-    print("⚠️ Redis недоступен, использую память", file=sys.stderr)
-    redis_client = None
 
 # ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 def normalize_url(url):
@@ -149,7 +140,7 @@ def has_suspicious_domain_pattern(url):
     except:
         return False
 
-# ========== ЗАГРУЗКА МОДЕЛИ (Render-совместимая) ==========
+# ========== ЗАГРУЗКА МОДЕЛИ ==========
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
@@ -157,7 +148,6 @@ model = None
 features_df = None
 feature_columns = []
 
-# Сначала пробуем модель
 try:
     if os.path.exists('ml/model.pkl'):
         model = joblib.load('ml/model.pkl')
@@ -168,7 +158,6 @@ except Exception as e:
     print(f"⚠️ Ошибка загрузки модели: {e}", file=sys.stderr)
     model = None
 
-# Потом датасет (опционально)
 try:
     if os.path.exists('data/processed/url_dataset_features.csv'):
         features_df = pd.read_csv('data/processed/url_dataset_features.csv')
@@ -182,25 +171,20 @@ except Exception as e:
 print("🚀 Сервер готов к работе!", file=sys.stderr)
 sys.stderr.flush()
 
-# ========== REDIS КЭШ (с fallback) ==========
+# ========== КЭШ В ПАМЯТИ ==========
+cache = {}
+
 def get_cached(url):
-    if redis_client:
-        try:
-            cached = redis_client.get(f"url:{url}")
-            if cached:
-                redis_client.incr('stats:hits')
-                return json.loads(cached)
-        except:
-            pass
-    redis_client.incr('stats:misses') if redis_client else None
+    if url in cache:
+        data, timestamp = cache[url]
+        if datetime.now() - timestamp < timedelta(hours=1):
+            return data
+        else:
+            del cache[url]
     return None
 
 def set_cached(url, data):
-    if redis_client:
-        try:
-            redis_client.setex(f"url:{url}", 3600, json.dumps(data))
-        except:
-            pass
+    cache[url] = (data, datetime.now())
 
 # ========== РОУТЫ ==========
 @app.route('/')
@@ -211,26 +195,8 @@ def index():
 def health():
     return jsonify({
         'status': 'ok',
-        'model_loaded': model is not None,
-        'dataset_loaded': features_df is not None,
-        'redis_available': redis_client is not None
+        'model_loaded': model is not None
     })
-
-@app.route('/stats')
-def stats():
-    if redis_client:
-        try:
-            hits = int(redis_client.get('stats:hits') or 0)
-            misses = int(redis_client.get('stats:misses') or 0)
-            return jsonify({
-                'cache_hits': hits,
-                'cache_misses': misses,
-                'hit_rate': round(hits/(hits+misses)*100, 1) if hits+misses > 0 else 0,
-                'model_available': model is not None
-            })
-        except:
-            pass
-    return jsonify({'error': 'Stats unavailable'})
 
 @app.route('/check', methods=['POST'])
 def check_url():
@@ -246,11 +212,11 @@ def check_url():
         return jsonify({
             'url': raw_url,
             'verdict': 'invalid',
-            'verdict_text': 'НЕВАЛИДНЫЙ URL',
+            'verdict_text': '❌ НЕВАЛИДНЫЙ URL',
             'score': 0,
             'explanations': [
                 'URL должен начинаться с http:// или https://',
-                'URL не должен содержать пробелов или спецсимволов',
+                'URL не должен содержать пробелов',
                 'Пример: https://google.com'
             ]
         }), 400
@@ -259,18 +225,17 @@ def check_url():
         return jsonify({
             'url': url,
             'verdict': 'warning',
-            'verdict_text': 'ЛОКАЛЬНЫЙ АДРЕС',
+            'verdict_text': '⚠️ ЛОКАЛЬНЫЙ АДРЕС',
             'score': 0,
             'explanations': ['Локальные адреса (localhost, 192.168.x.x) не проверяются']
         })
     
-    # Проверяем кэш
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
     
-    # ML предсказание (если возможно)
-    base_score = 0.3  # Базовый для новых URL
+    # ML предсказание
+    base_score = 0.3
     
     if model and features_df is not None:
         try:
@@ -308,57 +273,83 @@ def check_url():
     # Вердикт
     if score > 0.7:
         verdict = "dangerous"
-        verdict_text = "ОПАСНО"
+        verdict_text = "🔴 ОПАСНО"
     elif score > 0.4:
         verdict = "suspicious"
-        verdict_text = "ПОДОЗРИТЕЛЬНО"
+        verdict_text = "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict = "safe"
-        verdict_text = "БЕЗОПАСНО"
+        verdict_text = "🟢 БЕЗОПАСНО"
     
     # Объяснения
     explanations = []
+    
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
-    if 'login' in url or 'verify' in url or 'secure' in url:
-        explanations.append("Обнаружены подозрительные слова")
-    if 'bit.ly' in url or 'goo.gl' in url:
-        explanations.append("Сервис сокращения ссылок")
+    
+    if 'login' in url.lower() or 'verify' in url.lower() or 'secure' in url.lower():
+        explanations.append("Обнаружены подозрительные слова (login, verify, secure)")
+    
+    if 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
+        explanations.append("Использован сервис сокращения ссылок")
+    
     if re.search(r'https?://(\d{1,3}\.){3}\d{1,3}', url):
-        explanations.append("IP-адрес вместо домена")
+        explanations.append("Ссылка содержит IP-адрес вместо доменного имени")
+    
     if '@' in url:
-        explanations.append("Символ @ (может маскировать домен)")
+        explanations.append("Ссылка содержит символ @ (может использоваться для обмана)")
+    
     if has_homoglyphs(url):
-        explanations.append("Кириллические символы (омоглифы)")
+        explanations.append("Ссылка содержит символы, похожие на латиницу (омоглифы)")
+    
     if has_encoding(url):
-        explanations.append("Закодированные символы (%XX)")
+        explanations.append("Ссылка содержит закодированные символы (%XX)")
+    
     if has_suspicious_path(url):
-        explanations.append("Подозрительный путь")
+        explanations.append("В пути ссылки обнаружены подозрительные слова")
+    
     if has_suspicious_params(url):
-        explanations.append("Параметры перенаправления")
+        explanations.append("Ссылка содержит подозрительные параметры перенаправления")
+    
     if is_short_domain(url):
-        explanations.append("Слишком короткий домен")
+        explanations.append("Домен слишком короткий (часто используется в фишинге)")
+    
     if has_numbers_in_domain(url):
-        explanations.append("Много цифр в домене")
+        explanations.append("Домен содержит много цифр (подозрительно)")
+    
     if has_many_subdomains(url):
-        explanations.append("Много поддоменов")
+        explanations.append("Слишком много поддоменов (попытка запутать)")
+    
+    if is_typosquatting(url):
+        explanations.append("Ссылка имитирует домен известного сайта")
+    
     if is_suspicious_tld(url):
-        explanations.append("Подозрительная доменная зона")
+        explanations.append("Использована подозрительная доменная зона")
+    
+    if has_redirects(url):
+        explanations.append("Ссылка содержит параметры перенаправления")
+    
+    if is_too_long(url):
+        explanations.append("Ссылка слишком длинная (более 200 символов)")
+    
     if has_brand_phishing(url):
-        explanations.append("Известный бренд в подозрительном контексте")
+        explanations.append("Ссылка использует имя известного бренда для обмана")
+    
     if is_ip_with_port(url):
-        explanations.append("IP-адрес с портом")
+        explanations.append("Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
+    
+    if has_suspicious_domain_pattern(url):
+        explanations.append("Домен имеет подозрительную структуру (много дефисов или случайные символы)")
     
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
     
     result = {
         'url': raw_url,
-        'normalized_url': url,
         'verdict': verdict,
         'verdict_text': verdict_text,
         'score': round(score * 100),
-        'explanations': explanations[:10]
+        'explanations': explanations
     }
     
     set_cached(url, result)
@@ -367,28 +358,28 @@ def check_url():
 @app.route('/feedback', methods=['POST'])
 def feedback():
     data = request.json
+    
     os.makedirs('data', exist_ok=True)
-    try:
-        conn = sqlite3.connect('data/feedback.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS feedbacks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT,
-                model_verdict TEXT,
-                user_verdict TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        cursor.execute(
-            'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
-            (data.get('url'), data.get('model_verdict'), data.get('user_verdict'))
+    conn = sqlite3.connect('data/feedback.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS feedbacks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT,
+            model_verdict TEXT,
+            user_verdict TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-        conn.commit()
-        conn.close()
-        return jsonify({'status': 'ok'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    ''')
+    conn.commit()
+    cursor.execute(
+        'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
+        (data.get('url'), data.get('model_verdict'), data.get('user_verdict'))
+    )
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'status': 'ok'})
 
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
@@ -400,25 +391,16 @@ def admin_feedbacks():
         conn.close()
         
         if not rows:
-            return '<h1>Отзывов нет</h1><a href="/">Главная</a>'
+            return '<h1>📋 Отзывы пользователей</h1><p>📭 Пока нет отзывов</p><a href="/">На главную</a>'
         
-        html = '''
-        <style>
-        body { font-family: Arial; margin: 40px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; }
-        th { background: #f2f2f2; }
-        .match { color: green; }
-        .error { color: red; font-weight: bold; }
-        </style>
-        <h1>Отзывы ({len(rows)})</h1>
-        <table>
-        <tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th></tr>
-        '''
+        html = '<h1>📋 Отзывы пользователей</h1>'
+        html += f'<p>Всего отзывов: {len(rows)}</p>'
+        html += '<table border="1" cellpadding="5">'
+        html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> 项'
         
         for row in rows:
-            match_class = 'match' if row[2] == row[3] else 'error'
-            url_short = (row[1][:50] + '...') if len(row[1]) > 50 else row[1]
+            match_style = 'color: green;' if row[2] == row[3] else 'color: red; font-weight: bold;'
+            url_short = row[1][:50] + '...' if len(row[1]) > 50 else row[1]
             html += f'''
             <tr>
                 <td>{row[0]}</td>
@@ -426,14 +408,15 @@ def admin_feedbacks():
                 <td>{row[2]}</td>
                 <td class="{match_class}">{row[3]}</td>
                 <td>{row[4]}</td>
-            </tr>
+            <tr>
+             ?
             '''
         
-        html += '</table><a href="/">Главная</a>'
+        html += '<a href="/">На главную</a>'
         return html
         
     except Exception as e:
-        return f"<h1>Ошибка: {e}</h1><a href='/'>Главная</a>"
+        return f"<h1>Ошибка</h1><p>{str(e)}</p><a href='/'>На главную</a>", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
