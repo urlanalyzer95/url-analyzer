@@ -9,10 +9,12 @@ from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import joblib
 
-print("SERVER STARTING", file=sys.stderr)
+print("=== SERVER STARTING ===", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
+
+# ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 
 def normalize_url(url):
     url = url.strip()
@@ -33,7 +35,6 @@ def is_valid_url(url):
         domain = url.split('/')[2]
         if '.' not in domain:
             return False
-        # Проверка на недопустимые символы в домене
         invalid_chars = [',', ';', '|', '\\', '^', '`', '[', ']', '{', '}', '<', '>', '"', "'"]
         for char in invalid_chars:
             if char in domain:
@@ -45,34 +46,31 @@ def is_valid_url(url):
         return False
     return True
 
+# ========== ПРОВЕРКИ ==========
+
 def has_homoglyphs(url):
-    """Проверяет наличие омоглифов (символов, похожих на латиницу)"""
-    dangerous_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']  # кириллица, похожая на латиницу
+    dangerous_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']
     for char in url.lower():
         if char in dangerous_chars:
             return True
     return False
 
 def has_encoding(url):
-    """Проверяет наличие %XX кодирования"""
     return bool(re.search(r'%[0-9A-Fa-f]{2}', url))
 
-def has_brand_in_path(url):
-    """Проверяет наличие известных брендов в пути URL"""
-    brands = ['wellsfargo', 'paypal', 'google', 'apple', 'microsoft', 
-              'amazon', 'facebook', 'instagram', 'bank', 'secure']
+def has_suspicious_path(url):
+    suspicious_paths = ['login', 'verify', 'secure', 'account', 'banking', 'payment', 'update', 'confirm']
     try:
-        path_parts = url.split('/')[3:]  # после домена
+        path_parts = url.split('/')[3:]
         for part in path_parts:
-            for brand in brands:
-                if brand in part.lower():
+            for word in suspicious_paths:
+                if word in part.lower():
                     return True
     except:
         pass
     return False
 
 def has_suspicious_params(url):
-    """Проверяет наличие подозрительных GET-параметров"""
     suspicious_params = ['redirect', 'url', 'return', 'next', 'goto', 'target', 'redir']
     if '?' in url:
         params = url.split('?')[1]
@@ -82,7 +80,6 @@ def has_suspicious_params(url):
     return False
 
 def is_short_domain(url):
-    """Проверяет, что домен очень короткий (подозрительно)"""
     try:
         domain = url.split('/')[2]
         main_part = domain.split('.')[0]
@@ -91,7 +88,6 @@ def is_short_domain(url):
         return False
 
 def has_numbers_in_domain(url):
-    """Проверяет, содержит ли домен много цифр"""
     try:
         domain = url.split('/')[2]
         digits = sum(c.isdigit() for c in domain)
@@ -100,10 +96,9 @@ def has_numbers_in_domain(url):
         return False
 
 def has_many_subdomains(url):
-    """Проверяет количество поддоменов"""
     try:
         domain = url.split('/')[2]
-        subdomains = domain.split('.')[:-2]  # без TLD и второго уровня
+        subdomains = domain.split('.')[:-2]
         return len(subdomains) > 3
     except:
         return False
@@ -153,17 +148,62 @@ def has_redirects(url):
 def is_too_long(url):
     return len(url) > 200
 
+# ========== НОВЫЕ ПРОВЕРКИ ДЛЯ ФИШИНГА ==========
+
+def has_brand_phishing(url):
+    """Проверяет наличие известных брендов в фишинговом контексте"""
+    brands = [
+        'paypal', 'wellsfargo', 'google', 'apple', 'microsoft', 
+        'amazon', 'facebook', 'instagram', 'bank', 'secure',
+        'confirm', 'update', 'verify', 'account', 'login'
+    ]
+    try:
+        url_lower = url.lower()
+        for brand in brands:
+            if brand in url_lower:
+                legitimate = ['paypal.com', 'google.com', 'apple.com', 'microsoft.com', 'amazon.com']
+                is_legitimate = any(l in url_lower for l in legitimate)
+                if not is_legitimate:
+                    return True
+    except:
+        pass
+    return False
+
+def is_ip_with_port(url):
+    """Проверяет, является ли URL IP-адресом с портом"""
+    ip_pattern = re.compile(r'https?://(\d{1,3}\.){3}\d{1,3}(:\d+)?')
+    return bool(ip_pattern.match(url))
+
+def has_suspicious_domain_pattern(url):
+    """Проверяет подозрительные паттерны в домене"""
+    try:
+        domain = url.split('/')[2].lower()
+        # Много дефисов
+        if domain.count('-') > 3:
+            return True
+        # Много точек
+        if domain.count('.') > 4:
+            return True
+        # Случайная строка (много согласных подряд)
+        if re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', domain):
+            return True
+    except:
+        pass
+    return False
+
+# ========== ЗАГРУЗКА МОДЕЛИ ==========
+
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
 try:
     features_df = pd.read_csv('data/processed/url_dataset_features.csv')
     feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
-    print(f" Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
+    print(f"✅ Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
     model = joblib.load('ml/model.pkl')
-    print(" Model loaded successfully", file=sys.stderr)
+    print("✅ Model loaded successfully", file=sys.stderr)
 except Exception as e:
-    print(f" Error loading features or model: {e}", file=sys.stderr)
+    print(f"❌ Error loading features or model: {e}", file=sys.stderr)
     features_df = None
     feature_columns = []
     model = None
@@ -183,6 +223,8 @@ def get_cached(url):
 
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
+
+# ========== РОУТЫ ==========
 
 @app.route('/')
 def index():
@@ -256,8 +298,8 @@ def check_url():
             score = 0.8
         elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
             score = 0.6
-
-    # Если URL не найден в датасете (score 0.3), но есть явные признаки
+    
+    # ===== КОРРЕКТИРОВКА SCORE ДЛЯ ЯВНО ПОДОЗРИТЕЛЬНЫХ СЛУЧАЕВ =====
     if score < 0.4:
         if has_numbers_in_domain(url):
             score = 0.45
@@ -272,6 +314,20 @@ def check_url():
             score = 0.45
             print(f"🔧 Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
     
+    # ===== НОВЫЕ КОРРЕКТИРОВКИ =====
+    if has_brand_phishing(url) and score < 0.6:
+        score = 0.65
+        print(f"🔧 Повышаю score из-за бренда в фишинговом контексте: {url}", file=sys.stderr)
+    
+    if is_ip_with_port(url):
+        score = 0.8
+        print(f"🔧 Повышаю score из-за IP с портом: {url}", file=sys.stderr)
+    
+    if has_suspicious_domain_pattern(url) and score < 0.5:
+        score = 0.55
+        print(f"🔧 Повышаю score из-за подозрительного паттерна домена: {url}", file=sys.stderr)
+    
+    # ===== ВЕРДИКТ =====
     if score > 0.7:
         verdict = "dangerous"
         verdict_text = "🔴 ОПАСНО"
@@ -282,7 +338,9 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
+    # ===== ОБЪЯСНЕНИЯ =====
     explanations = []
+    
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
     
@@ -328,11 +386,19 @@ def check_url():
     
     if has_redirects(url):
         explanations.append("Ссылка содержит параметры перенаправления")
-    if has_brand_in_path(url):
-    explanations.append("Ссылка содержит имя известного бренда в пути (возможный фишинг)")
     
     if is_too_long(url):
         explanations.append("Ссылка слишком длинная (более 200 символов)")
+    
+    # НОВЫЕ ОБЪЯСНЕНИЯ
+    if has_brand_phishing(url):
+        explanations.append("⚠️ Ссылка использует имя известного бренда для обмана")
+    
+    if is_ip_with_port(url):
+        explanations.append("⚠️ Ссылка ведет на IP-адрес с портом (часто используется в фишинге)")
+    
+    if has_suspicious_domain_pattern(url):
+        explanations.append("⚠️ Домен имеет подозрительную структуру (много дефисов или случайные символы)")
     
     if not explanations:
         explanations.append("Явных признаков фишинга не обнаружено")
@@ -396,30 +462,30 @@ def admin_feedbacks():
         if not rows:
             return '''
             <html><body>
-            <h1>Отзывы пользователей</h1>
-            <p>Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
+            <h1>📋 Отзывы пользователей</h1>
+            <p>📭 Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
             <a href="/">На главную</a>
             </body></html>
             '''
         
-        html = '<h1>Отзывы пользователей</h1>'
+        html = '<h1>📋 Отзывы пользователей</h1>'
         html += f'<p>Всего отзывов: {len(rows)}</p>'
         html += '<table border="1" cellpadding="5">'
-        html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> </tr>'
+        html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> 项'
         
         for row in rows:
             match_style = 'color: green;' if row[2] == row[3] else 'color: red; font-weight: bold;'
             html += f'''
             <tr>
-                <td>{row[0]}</td>
-                <td style="word-break: break-all; max-width: 400px;">{row[1][:80]}{'...' if len(row[1]) > 80 else ''}</td>
-                <td>{row[2]}</td>
-                <td style="{match_style}">{row[3]}</td>
-                <td>{row[4]}</td>
+                <td>{row[0]}项
+                <td style="word-break: break-all; max-width: 400px;">{row[1][:80]}{'...' if len(row[1]) > 80 else ''}项
+                <td>{row[2]}项
+                <td style="{match_style}">{row[3]}项
+                <td>{row[4]}项
             </tr>
             '''
         
-        html += '</table><p><a href="/">На главную</a></p>'
+        html += '赶<a href="/">На главную</a>'
         return html
         
     except Exception as e:
