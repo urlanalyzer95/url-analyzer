@@ -9,12 +9,10 @@ from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import joblib
 
-print("=== SERVER STARTING ===", file=sys.stderr)
+print("SERVER STARTING", file=sys.stderr)
 sys.stderr.flush()
 
 app = Flask(__name__)
-
-# ========== НОРМАЛИЗАЦИЯ И ВАЛИДАЦИЯ ==========
 
 def normalize_url(url):
     url = url.strip()
@@ -46,8 +44,6 @@ def is_valid_url(url):
     except:
         return False
     return True
-
-# ========== НОВЫЕ ПРОВЕРКИ ==========
 
 def has_homoglyphs(url):
     """Проверяет наличие омоглифов (символов, похожих на латиницу)"""
@@ -156,19 +152,17 @@ def has_redirects(url):
 def is_too_long(url):
     return len(url) > 200
 
-# ========== ЗАГРУЗКА МОДЕЛИ ==========
-
 print("Loading features and model...", file=sys.stderr)
 sys.stderr.flush()
 
 try:
     features_df = pd.read_csv('data/processed/url_dataset_features.csv')
     feature_columns = [col for col in features_df.columns if col not in ['url', 'label']]
-    print(f"✅ Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
+    print(f" Загружено {len(features_df)} записей, {len(feature_columns)} признаков", file=sys.stderr)
     model = joblib.load('ml/model.pkl')
-    print("✅ Model loaded successfully", file=sys.stderr)
+    print(" Model loaded successfully", file=sys.stderr)
 except Exception as e:
-    print(f"❌ Error loading features or model: {e}", file=sys.stderr)
+    print(f" Error loading features or model: {e}", file=sys.stderr)
     features_df = None
     feature_columns = []
     model = None
@@ -188,8 +182,6 @@ def get_cached(url):
 
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
-
-# ========== РОУТЫ ==========
 
 @app.route('/')
 def index():
@@ -263,8 +255,7 @@ def check_url():
             score = 0.8
         elif 'bit.ly' in url.lower() or 'goo.gl' in url.lower() or 'tinyurl' in url.lower():
             score = 0.6
-    
-    # ===== КОРРЕКТИРОВКА SCORE ДЛЯ ЯВНО ПОДОЗРИТЕЛЬНЫХ СЛУЧАЕВ =====
+
     # Если URL не найден в датасете (score 0.3), но есть явные признаки
     if score < 0.4:
         if has_numbers_in_domain(url):
@@ -280,7 +271,6 @@ def check_url():
             score = 0.45
             print(f"🔧 Повышаю score из-за подозрительного TLD: {url}", file=sys.stderr)
     
-    # ===== ВЕРДИКТ ТОЛЬКО НА ОСНОВЕ SCORE =====
     if score > 0.7:
         verdict = "dangerous"
         verdict_text = "🔴 ОПАСНО"
@@ -291,9 +281,7 @@ def check_url():
         verdict = "safe"
         verdict_text = "🟢 БЕЗОПАСНО"
     
-    # ===== ОБЪЯСНЕНИЯ (НЕ ВЛИЯЮТ НА ВЕРДИКТ) =====
     explanations = []
-    
     if not url.startswith('https'):
         explanations.append("Отсутствует защищенное соединение HTTPS")
     
@@ -385,7 +373,6 @@ def feedback():
 
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
-    """Показывает все отзывы пользователей"""
     try:
         conn = sqlite3.connect('data/feedback.db')
         cursor = conn.cursor()
@@ -406,13 +393,13 @@ def admin_feedbacks():
         if not rows:
             return '''
             <html><body>
-            <h1>📋 Отзывы пользователей</h1>
-            <p>📭 Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
+            <h1>Отзывы пользователей</h1>
+            <p>Пока нет отзывов. Нажмите "Сообщить об ошибке" на сайте.</p>
             <a href="/">На главную</a>
             </body></html>
             '''
         
-        html = '<h1>📋 Отзывы пользователей</h1>'
+        html = '<h1>Отзывы пользователей</h1>'
         html += f'<p>Всего отзывов: {len(rows)}</p>'
         html += '<table border="1" cellpadding="5">'
         html += ' octet-stream<th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Дата</th> </tr>'
