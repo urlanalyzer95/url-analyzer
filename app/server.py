@@ -57,14 +57,15 @@ def has_encoding(url):
     """Проверяет наличие %XX кодирования"""
     return bool(re.search(r'%[0-9A-Fa-f]{2}', url))
 
-def has_suspicious_path(url):
-    """Проверяет наличие подозрительных слов в пути"""
-    suspicious_paths = ['login', 'verify', 'secure', 'account', 'banking', 'payment', 'update', 'confirm']
+def has_brand_in_path(url):
+    """Проверяет наличие известных брендов в пути URL"""
+    brands = ['wellsfargo', 'paypal', 'google', 'apple', 'microsoft', 
+              'amazon', 'facebook', 'instagram', 'bank', 'secure']
     try:
         path_parts = url.split('/')[3:]  # после домена
         for part in path_parts:
-            for word in suspicious_paths:
-                if word in part.lower():
+            for brand in brands:
+                if brand in part.lower():
                     return True
     except:
         pass
@@ -327,6 +328,8 @@ def check_url():
     
     if has_redirects(url):
         explanations.append("Ссылка содержит параметры перенаправления")
+    if has_brand_in_path(url):
+    explanations.append("Ссылка содержит имя известного бренда в пути (возможный фишинг)")
     
     if is_too_long(url):
         explanations.append("Ссылка слишком длинная (более 200 символов)")
