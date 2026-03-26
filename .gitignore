@@ -1,6 +1,8 @@
-__pycache__/ 
-*.pyc 
-data/feedback.db 
-data/dataset.csv 
-.env 
-venv/ 
+data/*.csv
+ml/*.pkl
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.env
+Dockerfile.*
