@@ -254,6 +254,8 @@ def feedback():
     os.makedirs('data', exist_ok=True)
     conn = sqlite3.connect('data/feedback.db')
     cursor = conn.cursor()
+    
+    # Создаём таблицу, если её нет (это здесь единственное место)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS feedbacks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -263,6 +265,9 @@ def feedback():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    conn.commit()
+    
+    # Сохраняем отзыв
     cursor.execute(
         'INSERT INTO feedbacks (url, model_verdict, user_verdict) VALUES (?, ?, ?)',
         (data['url'], data['model_verdict'], data['user_verdict'])
@@ -271,7 +276,7 @@ def feedback():
     conn.close()
     
     return jsonify({'status': 'ok'})
-
+    
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
     try:
