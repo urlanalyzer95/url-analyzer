@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка URL ссылки</title>
+    <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg">
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="card">
+        <h1>Проверка ссылки</h1>
+        <p class="description">
+          Введите URL адрес сайта для проверки на фишинг.
+        </p>
+
+        <form class="url-form" id="urlForm">
+          <div class="input-group">
+            <input
+              type="text"
+              id="urlInput"
+              placeholder="https://example.com"
+              required
+            />
+          </div>
+          <button type="submit" class="btn-check" id="checkBtn">
+            Проверить
+          </button>
+        </form>
+
+        <!-- Индикатор загрузки -->
+        <div class="loader-container" id="loader">
+          <div class="loader"></div>
+          <span class="loader-text">Анализируем ссылку...</span>
+        </div>
+
+        <!-- Результаты проверки -->
+        <div id="resultContainer" style="display: none">
+          <div class="result-box" id="resultBox"></div>
+
+          <!-- Объяснения -->
+          <div class="explanations" id="explanations"></div>
+
+          <!-- Кнопка обратной связи -->
+          <button class="btn-report-error" id="feedbackBtn">
+            Сообщить об ошибке
+          </button>
+
+          <!-- Форма обратной связи -->
+          <div
+            class="feedback-section"
+            id="feedbackSection"
+            style="display: none"
+          >
+            <h3>Ваша оценка</h3>
+            <div class="radio-group">
+              <input
+                type="radio"
+                id="danger"
+                name="verdict"
+                value="dangerous"
+              />
+              <label for="danger" class="radio-label label-danger"
+                >Опасно</label
+              >
+
+              <input
+                type="radio"
+                id="suspicious"
+                name="verdict"
+                value="suspicious"
+              />
+              <label for="suspicious" class="radio-label label-suspicious"
+                >Подозрительно</label
+              >
+
+              <input type="radio" id="safe" name="verdict" value="safe" />
+              <label for="safe" class="radio-label label-safe">Безопасно</label>
+
+              <input type="radio" id="other" name="verdict" value="other" />
+              <label for="other" class="radio-label label-other">Другое</label>
+            </div>
+
+            <textarea
+              class="comment-input"
+              id="commentInput"
+              placeholder="Комментарий (необязательно)"
+            ></textarea>
+
+            <div class="feedback-buttons">
+              <button class="btn-feedback" id="submitFeedback">
+                Отправить отзыв
+              </button>
+              <button class="btn-cancel" id="cancelFeedback">Отмена</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Глобальная переменная для хранения текущего URL и вердикта модели
+      let currentUrl = "";
+      let currentModelVerdict = "";
+
+      // Элементы DOM
+      const urlForm = document.getElementById("urlForm");
+      const urlInput = document.getElementById("urlInput");
+      const checkBtn = document.getElementById("checkBtn");
+      const loader = document.getElementById("loader");
+      const resultContainer = document.getElementById("resultContainer");
+      const resultBox = document.getElementById("resultBox");
+      const explanationsDiv = document.getElementById("explanations");
+      const feedbackBtn = document.getElementById("feedbackBtn");
+      const feedbackSection = document.getElementById("feedbackSection");
+      const submitFeedbackBtn = document.getElementById("submitFeedback");
+      const cancelFeedbackBtn = document.getElementById("cancelFeedback");
+
+      // Проверка URL
+      urlForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const url = urlInput.value.trim();
+        if (!url) return;
+
+        // Показываем загрузку
+        setLoading(true);
+        resultContainer.style.display = "none";
+        feedbackSection.style.display = "none";
+
+        try {
+          const response = await fetch("/check", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ url: url }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            displayResult(data);
+            currentUrl = data.url;
+            currentModelVerdict = data.verdict;
+          } else {
+            showError(data.error || "Ошибка проверки URL");
+          }
+        } catch (error) {
+          showError("Ошибка соединения с сервером");
+          console.error(error);
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      // Отображение результатов
+      function displayResult(data) {
+        // Устанавливаем класс для цвета
+        resultBox.className = "result-box";
+        if (data.verdict === "dangerous") {
+          resultBox.classList.add("dangerous");
+        } else if (data.verdict === "suspicious") {
+          resultBox.classList.add("suspicious");
+        } else if (data.verdict === "safe") {
+          resultBox.classList.add("safe");
+        } else {
+          resultBox.classList.add("error");
+        }
+
+        // Текст результата
+        resultBox.innerHTML = `
+                <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+                <div style="font-size: 14px; opacity: 0.8;">URL: ${data.url}</div>
+                ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+            `;
+
+        // Объяснения
+        if (data.explanations && data.explanations.length > 0) {
+          explanationsDiv.innerHTML = `
+                    <div class="expl-list">
+                        <strong>Обнаружено:</strong>
+                        <ul>
+                            ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
+                        </ul>
+                    </div>
+                `;
+        }
+
+        resultContainer.style.display = "block";
+      }
+
+      // Показ ошибки
+      function showError(message) {
+        resultBox.className = "result-box error";
+        resultBox.innerHTML = `<div>❌ ${message}</div>`;
+        explanationsDiv.innerHTML = "";
+        resultContainer.style.display = "block";
+      }
+
+      // Показ/скрытие загрузки
+      function setLoading(loading) {
+        loader.style.display = loading ? "flex" : "none";
+        checkBtn.disabled = loading;
+        if (loading) {
+          checkBtn.classList.add("disabled");
+          checkBtn.textContent = "Проверка...";
+        } else {
+          checkBtn.classList.remove("disabled");
+          checkBtn.textContent = "Проверить";
+        }
+      }
+
+      // Показать форму обратной связи
+      feedbackBtn.addEventListener("click", () => {
+        feedbackSection.style.display = "block";
+        feedbackBtn.style.display = "none"; 
+        feedbackSection.scrollIntoView({ behavior: "smooth" });
+      });
+
+      // Отмена формы обратной связи
+      cancelFeedbackBtn.addEventListener("click", () => {
+        feedbackSection.style.display = "none";
+        feedbackBtn.style.display = "block"; 
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+      });
+
+      // Отправка обратной связи
+      submitFeedbackBtn.addEventListener("click", async () => {
+        const selectedVerdict = document.querySelector(
+          'input[name="verdict"]:checked',
+        );
+        const comment = document.getElementById("commentInput").value.trim();
+
+        if (!selectedVerdict) {
+          alert("Пожалуйста, выберите вашу оценку");
+          return;
+        }
+
+        const feedbackData = {
+          url: currentUrl,
+          model_verdict: currentModelVerdict,
+          user_verdict: selectedVerdict.value,
+          comment: comment,
+        };
+
+        try {
+          submitFeedbackBtn.disabled = true;
+          submitFeedbackBtn.textContent = "Отправка...";
+
+          const response = await fetch("/feedback", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(feedbackData),
+          });
+
+          if (response.ok) {
+            alert("✅ Спасибо за отзыв!");
+            feedbackBtn.style.display = "block"; 
+            cancelFeedbackBtn.click();
+          } else {
+            alert("❌ Ошибка при отправке отзыва");
+          }
+        } catch (error) {
+          console.error(error);
+          alert("❌ Ошибка соединения с сервером");
+        } finally {
+          submitFeedbackBtn.disabled = false;
+          submitFeedbackBtn.textContent = "Отправить отзыв";
+        }
+      });
+    </script>
+  </body>
+</html>
