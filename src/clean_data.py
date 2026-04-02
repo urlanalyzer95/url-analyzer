@@ -7,9 +7,7 @@ from urllib.parse import urlparse
 from datetime import datetime
 
 # Правильные пути
-
-# Автоматическое определение путей относительно этого файла
-BASE_DIR = Path(__file__).parent.parent  # URL-ANALYZER/
+BASE_DIR = Path(__file__).parent.parent  
 raw_folder = BASE_DIR / 'data' / 'raw'
 processed_folder = BASE_DIR / 'data' / 'processed'
 
@@ -34,7 +32,7 @@ def clean_url_dataset(df):
         df = df[df[url_col] != '']
         df = df[df[url_col] != 'nan']
         
-        # Валидация через urlparse (надёжнее regex)
+        # Валидация через urlparse 
         def is_valid_url(url):
             try:
                 parsed = urlparse(url)
@@ -63,7 +61,7 @@ def clean_url_dataset(df):
     
     return df
 
-# Балансировка классов (обязательно для ML)
+# Балансировка классов 
 
 def balance_classes(df, label_col='label', random_state=42):
     if label_col not in df.columns:
@@ -135,7 +133,7 @@ def save_with_metadata(df_features, output_path, original_name):
     # Сохраняем CSV
     df_features.to_csv(output_path, index=False, encoding='utf-8')
     
-    # Сохраняем метаданные (для Роль 1)
+    # Сохраняем метаданные 
     metadata = {
         'source_file': original_name,
         'feature_columns': [c for c in df_features.columns if c not in ['url', 'label']],

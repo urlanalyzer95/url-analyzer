@@ -1,56 +1,3 @@
-# # Создай файл: src/export_feedback.py
-# import sys
-# import pandas as pd
-# import sqlite3
-# from pathlib import Path
-# # В начало export_feedback.py
-
-# sys.path.append(str(Path(__file__).parent.parent))  
-# from feedback_system import FeedbackSystem
-
-
-# # Инициализация
-# fb = FeedbackSystem()
-
-# # 1. Получаем статистику
-# print("📊 СТАТИСТИКА ОБРАТНОЙ СВЯЗИ:")
-# stats = fb.get_stats()
-# for key, value in stats.items():
-#     print(f"   {key}: {value}")
-
-# # 2. Экспортируем все отзывы
-# print("\n📥 ЭКСПОРТ ОТЗЫВОВ...")
-# conn = sqlite3.connect('data/feedback.db')
-
-# # Все отзывы
-# all_feedback = pd.read_sql_query("SELECT * FROM feedbacks", conn)
-# all_feedback.to_csv('data/feedback_export.csv', index=False)
-# all_feedback.to_json('data/feedback_export.json', orient='records', indent=2)
-
-# # Только ошибочные предсказания (самые ценные!)
-# misclassified = fb.get_misclassified(limit=1000)
-# if not misclassified.empty:
-#     misclassified.to_csv('data/misclassified_urls.csv', index=False)
-#     print(f"✅ Найдено {len(misclassified)} ошибочных предсказаний")
-
-# # Новые примеры для дообучения
-# new_examples = fb.get_new_examples(min_confirmations=1)
-# if not new_examples.empty:
-#     new_examples.to_csv('data/new_training_examples.csv', index=False)
-#     print(f"✅ Найдено {len(new_examples)} новых примеров")
-
-# conn.close()
-# print("\n✅ ЭКСПОРТ ЗАВЕРШЁН!")
-# print("   • data/feedback_export.csv - все отзывы")
-# print("   • data/misclassified_urls.csv - ошибки модели")
-# print("   • data/new_training_examples.csv - для дообучения")
-
-
-"""
-Экспорт отзывов из БД в CSV/JSON
-Без зависимости от feedback_system.py
-"""
-
 import sqlite3
 import pandas as pd
 from pathlib import Path
@@ -95,7 +42,7 @@ def get_stats():
 
 
 def export_all_feedback():
-    """Экспорт всех отзывов в CSV и JSON"""
+    # Экспорт всех отзывов в CSV и JSON
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM feedbacks ORDER BY timestamp DESC", conn)
     conn.close()
@@ -111,7 +58,7 @@ def export_all_feedback():
 
 
 def export_misclassified():
-    """Экспорт ошибочных предсказаний (модель ошиблась)"""
+    # Экспорт ошибочных предсказаний (модель ошиблась)
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query('''
         SELECT id, url, model_verdict, user_verdict, user_comment, timestamp
@@ -131,7 +78,7 @@ def export_misclassified():
 
 
 def export_new_examples():
-    """Экспорт новых примеров для дообучения модели"""
+    # Экспорт новых примеров для дообучения модели
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query('''
         SELECT DISTINCT url, user_verdict
@@ -164,7 +111,7 @@ def export_new_examples():
 
 
 def mark_as_processed(urls):
-    """Отметить URL как обработанные (чтобы не экспортировать повторно)"""
+    # Отметить URL как обработанные (чтобы не экспортировать повторно)
     if not urls:
         return 0
     
@@ -185,10 +132,9 @@ def mark_as_processed(urls):
 
 
 def export_for_retraining(mark_processed=True):
-    """
-    Полный экспорт для дообучения модели
-    Возвращает DataFrame с колонками url, label
-    """
+    # Полный экспорт для дообучения модели
+    # Возвращает DataFrame с колонками url, label
+    
     df = export_new_examples()
     
     if not df.empty and mark_processed:
@@ -197,7 +143,7 @@ def export_for_retraining(mark_processed=True):
     return df
 
 
-# ========== ОСНОВНОЙ ЗАПУСК ==========
+# ОСНОВНОЙ ЗАПУСК 
 if __name__ == '__main__':
     print("\n" + "="*50)
     print("📊 ЭКСПОРТ ОТЗЫВОВ ИЗ БД")

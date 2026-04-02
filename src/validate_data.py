@@ -1,5 +1,3 @@
-# Создай файл: src/validate_data.py
-
 import pandas as pd
 import numpy as np
 
