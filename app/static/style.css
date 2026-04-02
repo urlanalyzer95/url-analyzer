@@ -204,15 +204,18 @@ h1 {
 
 .btn-report-error {
   margin-top: 20px;
-  padding: 12px 25px;
+  padding: 10px 20px;
   background-color: #6c757d;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .btn-report-error:hover {
@@ -355,7 +358,7 @@ h1 {
 }
 
 .footer-content {
-  max-width: 1300px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 20px 20px 15px;
   display: flex;
