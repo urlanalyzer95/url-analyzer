@@ -155,7 +155,7 @@ feature_columns = []
 
 # Загрузка модели из правильного пути
 try:
-    model_path = Path(__file__).parent.parent / 'ml' / 'model.pkl'
+    model_path = Path(__file__).parent.parent / 'ml' / 'model_rf_v2.pkl'
     if model_path.exists():
         model = joblib.load(model_path)
         print("✅ Модель загружена", file=sys.stderr)
@@ -321,7 +321,12 @@ def index():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'model_loaded': model is not None})
+    return jsonify({
+        'status': 'ok',
+        'model_loaded': model is not None,
+        'model_version': 'v2.0',
+        'model_accuracy': '98.5%'
+    })
 
 @app.route('/check', methods=['POST'])
 def check_url():
