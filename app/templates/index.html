@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Проверка URL ссылки</title>
-    <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg">
+    <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg" />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
@@ -98,6 +98,61 @@
         </div>
       </div>
     </div>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <div class="footer-logo">
+          <img src="/static/faviconka.svg" alt="Logo" class="footer-icon" />
+          <span class="footer-brand">URL Analyzer</span>
+        </div>
+
+        <div class="footer-section">
+          <h4>Модель</h4>
+          <p>
+            <span style="white-space: nowrap; margin-right: 20px"
+              >Random Forest</span
+            >
+            <span style="white-space: nowrap"
+              >Точность: <span class="model-accuracy">94%</span></span
+            >
+          </p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Проект</h4>
+          <p>Анализатор подозрительности URL</p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Ссылки</h4>
+          <p>
+            <a
+              href="https://github.com/urlanalyzer95/url-analyzer"
+              class="footer-link"
+              style="white-space: nowrap; margin-right: 20px"
+              >🔗 GitHub</a
+            >
+            <a class="footer-link" style="white-space: nowrap"
+              >urlanalyzer95@gmail.com</a
+            >
+          </p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Статус</h4>
+          <p>
+            <span style="white-space: nowrap; margin-right: 20px">
+              <span class="status-dot"></span> Онлайн
+            </span>
+            <span style="white-space: nowrap">Версия 2.0</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2026 Команда разработчиков. Все права защищены.</p>
+      </div>
+    </footer>
 
     <script>
       // Глобальная переменная для хранения текущего URL и вердикта модели
@@ -215,14 +270,14 @@
       // Показать форму обратной связи
       feedbackBtn.addEventListener("click", () => {
         feedbackSection.style.display = "block";
-        feedbackBtn.style.display = "none"; 
+        feedbackBtn.style.display = "none";
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
       // Отмена формы обратной связи
       cancelFeedbackBtn.addEventListener("click", () => {
         feedbackSection.style.display = "none";
-        feedbackBtn.style.display = "block"; 
+        feedbackBtn.style.display = "block";
         document
           .querySelectorAll('input[name="verdict"]')
           .forEach((r) => (r.checked = false));
@@ -262,7 +317,7 @@
 
           if (response.ok) {
             alert("✅ Спасибо за отзыв!");
-            feedbackBtn.style.display = "block"; 
+            feedbackBtn.style.display = "block";
             cancelFeedbackBtn.click();
           } else {
             alert("❌ Ошибка при отправке отзыва");
