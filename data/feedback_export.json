@@ -1,3 +1,11 @@
 [
-
+  {
+    "id":1,
+    "url":"https:\/\/google.com",
+    "model_verdict":"suspicious",
+    "user_verdict":"safe",
+    "user_comment":"",
+    "timestamp":"2026-04-02 14:35:11",
+    "is_processed":0
+  }
 ]
