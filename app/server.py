@@ -1,5 +1,5 @@
 import sys
-import sqlite3
+# import sqlite3
 import os
 import re
 from datetime import datetime, timedelta
@@ -8,6 +8,9 @@ from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 import joblib
 from pathlib import Path
+
+# Импортируем модуль работы с БД
+from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
 app = Flask(__name__)
@@ -126,23 +129,38 @@ def check_url():
     set_cached(url, result)
     return jsonify(result)
 
+# @app.route('/feedback', methods=['POST'])
+# def feedback():
+#     try:
+#         data = request.json
+#         os.makedirs('data', exist_ok=True)
+#         conn = sqlite3.connect('data/feedback.db')
+#         conn.execute('''
+#             CREATE TABLE IF NOT EXISTS feedbacks (
+#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+#                 url TEXT, model_verdict TEXT, user_verdict TEXT,
+#                 user_comment TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+#             )
+#         ''')
+#         conn.execute('INSERT INTO feedbacks (url, model_verdict, user_verdict, user_comment) VALUES (?, ?, ?, ?)',
+#                      (data.get('url'), data.get('model_verdict'), data.get('user_verdict'), data.get('comment', '')))
+#         conn.commit()
+#         conn.close()
+#         return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
+#     except Exception as e:
+#         return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
         data = request.json
-        os.makedirs('data', exist_ok=True)
-        conn = sqlite3.connect('data/feedback.db')
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS feedbacks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT, model_verdict TEXT, user_verdict TEXT,
-                user_comment TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.execute('INSERT INTO feedbacks (url, model_verdict, user_verdict, user_comment) VALUES (?, ?, ?, ?)',
-                     (data.get('url'), data.get('model_verdict'), data.get('user_verdict'), data.get('comment', '')))
-        conn.commit()
-        conn.close()
+        save_feedback(
+            data.get('url'),
+            data.get('model_verdict'),
+            data.get('user_verdict'),
+            data.get('comment', '')
+        )
         return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
@@ -150,9 +168,11 @@ def feedback():
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
     try:
-        conn = sqlite3.connect('data/feedback.db')
-        df = pd.read_sql_query("SELECT id, url, model_verdict, user_verdict, user_comment, timestamp FROM feedbacks ORDER BY timestamp DESC", conn)
-        conn.close()
+        df = get_all_feedbacks()
+         
+        # conn = sqlite3.connect('data/feedback.db')
+        # df = pd.read_sql_query("SELECT id, url, model_verdict, user_verdict, user_comment, timestamp FROM feedbacks ORDER BY timestamp DESC", conn)
+        # conn.close()
         
         if df.empty:
             return '<h1>📋 Отзывы</h1><p>Пока нет</p><a href="/">На главную</a>'
@@ -181,7 +201,8 @@ def admin_feedbacks():
 @app.route('/download-db')
 def download_db():
     """Скачать БД с отзывами"""
-    db_path = '/app/data/feedback.db'
+    db_path = get_db_path()
+    # db_path = '/app/data/feedback.db'
     
     if os.path.exists(db_path):
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
