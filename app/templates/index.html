@@ -102,7 +102,7 @@
     <footer class="footer">
       <div class="footer-content">
         <div class="footer-logo">
-          <img src="/static/faviconka.svg" alt="Logo" class="footer-icon" />
+          <img src="faviconka.svg" alt="Logo" class="footer-icon" />
           <span class="footer-brand">URL Analyzer</span>
         </div>
 
@@ -172,6 +172,18 @@
       const submitFeedbackBtn = document.getElementById("submitFeedback");
       const cancelFeedbackBtn = document.getElementById("cancelFeedback");
 
+      // Функция сброса состояния кнопки обратной связи
+      function resetFeedbackButtonState() {
+        // Кнопка должна быть видна, форма скрыта
+        feedbackBtn.style.display = "block";
+        feedbackSection.style.display = "none";
+        // Очищаем форму
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+      }
+
       // Проверка URL
       urlForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -179,10 +191,12 @@
         const url = urlInput.value.trim();
         if (!url) return;
 
+        // Сбрасываем состояние кнопки при новом URL
+        resetFeedbackButtonState();
+
         // Показываем загрузку
         setLoading(true);
         resultContainer.style.display = "none";
-        feedbackSection.style.display = "none";
 
         try {
           const response = await fetch("/check", {
@@ -226,20 +240,23 @@
 
         // Текст результата
         resultBox.innerHTML = `
-                <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>          
-                ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
-            `;
+          <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+          <div style="font-size: 14px; opacity: 0.8;">URL: ${data.url}</div>
+          ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+        `;
 
         // Объяснения
         if (data.explanations && data.explanations.length > 0) {
           explanationsDiv.innerHTML = `
-                    <div class="expl-list">
-                        <strong>Обнаружено:</strong>
-                        <ul>
-                            ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
-                        </ul>
-                    </div>
-                `;
+            <div class="expl-list">
+              <strong>Обнаружено:</strong>
+              <ul>
+                ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
+              </ul>
+            </div>
+          `;
+        } else {
+          explanationsDiv.innerHTML = "";
         }
 
         resultContainer.style.display = "block";
@@ -266,14 +283,14 @@
         }
       }
 
-      // Показать форму обратной связи
+      // Показать форму обратной связи (скрываем кнопку)
       feedbackBtn.addEventListener("click", () => {
         feedbackSection.style.display = "block";
         feedbackBtn.style.display = "none";
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
-      // Отмена формы обратной связи
+      // Отмена формы обратной связи (показываем кнопку)
       cancelFeedbackBtn.addEventListener("click", () => {
         feedbackSection.style.display = "none";
         feedbackBtn.style.display = "block";
@@ -316,14 +333,25 @@
 
           if (response.ok) {
             alert("✅ Спасибо за отзыв!");
-            feedbackBtn.style.display = "block";
-            cancelFeedbackBtn.click();
+            // ПОСЛЕ ОТПРАВКИ — КНОПКА ПРОПАДАЕТ
+            feedbackBtn.style.display = "none";
+            feedbackSection.style.display = "none";
+            // Очищаем форму
+            document
+              .querySelectorAll('input[name="verdict"]')
+              .forEach((r) => (r.checked = false));
+            document.getElementById("commentInput").value = "";
           } else {
             alert("❌ Ошибка при отправке отзыва");
+            // Если ошибка, возвращаем кнопку обратно
+            feedbackBtn.style.display = "block";
+            feedbackSection.style.display = "none";
           }
         } catch (error) {
           console.error(error);
           alert("❌ Ошибка соединения с сервером");
+          feedbackBtn.style.display = "block";
+          feedbackSection.style.display = "none";
         } finally {
           submitFeedbackBtn.disabled = false;
           submitFeedbackBtn.textContent = "Отправить отзыв";
