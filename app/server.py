@@ -111,11 +111,11 @@ def check_url():
     score = predict(url)
     
     if score > 0.7:
-        verdict, text = "dangerous", "ОПАСНО"
+        verdict, text = "dangerous", "🔴 ОПАСНО"
     elif score > 0.4:
-        verdict, text = "suspicious", "ПОДОЗРИТЕЛЬНО"
+        verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
-        verdict, text = "safe", "БЕЗОПАСНО"
+        verdict, text = "safe", "🟢 БЕЗОПАСНО"
     
     result = {
         'url': raw_url,
