@@ -96,6 +96,13 @@
             </div>
           </div>
         </div>
+
+        <!-- Блок для системных сообщений (внизу) -->
+        <div
+          id="systemMessage"
+          class="system-message"
+          style="display: none"
+        ></div>
       </div>
     </div>
 
@@ -130,7 +137,7 @@
               href="https://github.com/urlanalyzer95/url-analyzer"
               class="footer-link"
               style="white-space: nowrap; margin-right: 20px"
-              >🔗 GitHub</a
+              > GitHub</a
             >
             <a class="footer-link" style="white-space: nowrap"
               >urlanalyzer95@gmail.com</a
@@ -171,10 +178,30 @@
       const feedbackSection = document.getElementById("feedbackSection");
       const submitFeedbackBtn = document.getElementById("submitFeedback");
       const cancelFeedbackBtn = document.getElementById("cancelFeedback");
+      const systemMessage = document.getElementById("systemMessage");
 
-      // Функция для показа кнопки и скрытия формы
-      function showFeedbackButton() {
-        feedbackBtn.style.display = "block";
+      // Функция для показа системного сообщения
+      function showSystemMessage(message, isError = false) {
+        systemMessage.textContent = message;
+        systemMessage.className = "system-message";
+        if (isError) {
+          systemMessage.classList.add("system-message-error");
+        } else {
+          systemMessage.classList.add("system-message-success");
+        }
+        systemMessage.style.display = "block";
+
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+          if (systemMessage.style.display === "block") {
+            systemMessage.style.display = "none";
+          }
+        }, 5000);
+      }
+
+      // Функция для ПОЛНОГО скрытия кнопки (после отправки отзыва)
+      function hideButtonCompletely() {
+        feedbackBtn.style.display = "none";
         feedbackSection.style.display = "none";
         // Очищаем форму
         document
@@ -183,17 +210,10 @@
         document.getElementById("commentInput").value = "";
       }
 
-      // Функция для скрытия кнопки и показа формы
-      function showFeedbackForm() {
-        feedbackBtn.style.display = "none";
-        feedbackSection.style.display = "block";
-      }
-
-      // Функция для полного скрытия кнопки (после отправки отзыва)
-      function hideFeedbackButtonPermanently() {
-        feedbackBtn.style.display = "none";
+      // Функция для показа кнопки (при новом URL)
+      function showButton() {
+        feedbackBtn.style.display = "block";
         feedbackSection.style.display = "none";
-        // Очищаем форму
         document
           .querySelectorAll('input[name="verdict"]')
           .forEach((r) => (r.checked = false));
@@ -207,8 +227,11 @@
         const url = urlInput.value.trim();
         if (!url) return;
 
-        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ (если она была скрыта после предыдущего отзыва)
-        showFeedbackButton();
+        // Скрываем системное сообщение при новом запросе
+        systemMessage.style.display = "none";
+
+        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ
+        showButton();
 
         // Показываем загрузку
         setLoading(true);
@@ -301,13 +324,14 @@
 
       // Нажатие на кнопку "Сообщить об ошибке" - скрываем кнопку, показываем форму
       feedbackBtn.addEventListener("click", () => {
-        showFeedbackForm();
+        feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "block";
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
       // Отмена формы обратной связи - показываем кнопку, скрываем форму
       cancelFeedbackBtn.addEventListener("click", () => {
-        showFeedbackButton();
+        showButton();
       });
 
       // Отправка обратной связи
@@ -318,7 +342,7 @@
         const comment = document.getElementById("commentInput").value.trim();
 
         if (!selectedVerdict) {
-          alert("Пожалуйста, выберите вашу оценку");
+          showSystemMessage("Пожалуйста, выберите вашу оценку", true);
           return;
         }
 
@@ -342,19 +366,18 @@
           });
 
           if (response.ok) {
-            alert("✅ Спасибо за отзыв!");
-            // КЛЮЧЕВОЙ МОМЕНТ: ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ - КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
-            hideFeedbackButtonPermanently();
+            // ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ УСПЕХЕ
+            showSystemMessage("✅ Спасибо за отзыв!", false);
+            // КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
+            hideButtonCompletely();
           } else {
-            alert("❌ Ошибка при отправке отзыва");
-            // При ошибке - показываем кнопку обратно, чтобы можно было попробовать снова
-            showFeedbackButton();
+            showSystemMessage("❌ Ошибка при отправке отзыва", true);
+            showButton();
           }
         } catch (error) {
           console.error(error);
-          alert("❌ Ошибка соединения с сервером");
-          // При ошибке - показываем кнопку обратно
-          showFeedbackButton();
+          showSystemMessage("❌ Ошибка соединения с сервером", true);
+          showButton();
         } finally {
           submitFeedbackBtn.disabled = false;
           submitFeedbackBtn.textContent = "Отправить отзыв";
