@@ -527,11 +527,11 @@ h1 {
 }
 
 .system-message-success {
-  color: #28a745;
+  color: black;
 }
 
 .system-message-error {
-  color: #dc3545;
+  color: black;
 }
 
 @keyframes fadeIn {
