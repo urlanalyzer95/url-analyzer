@@ -130,7 +130,7 @@
               href="https://github.com/urlanalyzer95/url-analyzer"
               class="footer-link"
               style="white-space: nowrap; margin-right: 20px"
-              >GitHub</a
+              >🔗 GitHub</a
             >
             <a class="footer-link" style="white-space: nowrap"
               >urlanalyzer95@gmail.com</a
@@ -172,10 +172,26 @@
       const submitFeedbackBtn = document.getElementById("submitFeedback");
       const cancelFeedbackBtn = document.getElementById("cancelFeedback");
 
-      // Функция сброса состояния кнопки обратной связи
-      function resetFeedbackButtonState() {
-        // Кнопка должна быть видна, форма скрыта
+      // Функция для показа кнопки и скрытия формы
+      function showFeedbackButton() {
         feedbackBtn.style.display = "block";
+        feedbackSection.style.display = "none";
+        // Очищаем форму
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+      }
+
+      // Функция для скрытия кнопки и показа формы
+      function showFeedbackForm() {
+        feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "block";
+      }
+
+      // Функция для полного скрытия кнопки (после отправки отзыва)
+      function hideFeedbackButtonPermanently() {
+        feedbackBtn.style.display = "none";
         feedbackSection.style.display = "none";
         // Очищаем форму
         document
@@ -191,8 +207,8 @@
         const url = urlInput.value.trim();
         if (!url) return;
 
-        // Сбрасываем состояние кнопки при новом URL
-        resetFeedbackButtonState();
+        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ (если она была скрыта после предыдущего отзыва)
+        showFeedbackButton();
 
         // Показываем загрузку
         setLoading(true);
@@ -283,21 +299,15 @@
         }
       }
 
-      // Показать форму обратной связи (скрываем кнопку)
+      // Нажатие на кнопку "Сообщить об ошибке" - скрываем кнопку, показываем форму
       feedbackBtn.addEventListener("click", () => {
-        feedbackSection.style.display = "block";
-        feedbackBtn.style.display = "none";
+        showFeedbackForm();
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
-      // Отмена формы обратной связи (показываем кнопку)
+      // Отмена формы обратной связи - показываем кнопку, скрываем форму
       cancelFeedbackBtn.addEventListener("click", () => {
-        feedbackSection.style.display = "none";
-        feedbackBtn.style.display = "block";
-        document
-          .querySelectorAll('input[name="verdict"]')
-          .forEach((r) => (r.checked = false));
-        document.getElementById("commentInput").value = "";
+        showFeedbackButton();
       });
 
       // Отправка обратной связи
@@ -333,25 +343,18 @@
 
           if (response.ok) {
             alert("✅ Спасибо за отзыв!");
-            // ПОСЛЕ ОТПРАВКИ — КНОПКА ПРОПАДАЕТ
-            feedbackBtn.style.display = "none";
-            feedbackSection.style.display = "none";
-            // Очищаем форму
-            document
-              .querySelectorAll('input[name="verdict"]')
-              .forEach((r) => (r.checked = false));
-            document.getElementById("commentInput").value = "";
+            // КЛЮЧЕВОЙ МОМЕНТ: ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ - КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
+            hideFeedbackButtonPermanently();
           } else {
             alert("❌ Ошибка при отправке отзыва");
-            // Если ошибка, возвращаем кнопку обратно
-            feedbackBtn.style.display = "block";
-            feedbackSection.style.display = "none";
+            // При ошибке - показываем кнопку обратно, чтобы можно было попробовать снова
+            showFeedbackButton();
           }
         } catch (error) {
           console.error(error);
           alert("❌ Ошибка соединения с сервером");
-          feedbackBtn.style.display = "block";
-          feedbackSection.style.display = "none";
+          // При ошибке - показываем кнопку обратно
+          showFeedbackButton();
         } finally {
           submitFeedbackBtn.disabled = false;
           submitFeedbackBtn.textContent = "Отправить отзыв";
