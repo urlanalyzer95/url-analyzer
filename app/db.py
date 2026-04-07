@@ -1,7 +1,3 @@
-"""
-Модуль для работы с базой данных отзывов
-"""
-
 import sqlite3
 import os
 import pandas as pd
@@ -10,7 +6,7 @@ DB_PATH = 'data/feedback.db'
 
 
 def init_db():
-    """Создаёт таблицу для отзывов, если её нет"""
+    # Создаёт таблицу для отзывов, если её нет
     os.makedirs('data', exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''
@@ -28,7 +24,7 @@ def init_db():
 
 
 def save_feedback(url, model_verdict, user_verdict, user_comment=""):
-    """Сохраняет отзыв в БД"""
+    # Сохраняет отзыв в БД
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''
         INSERT INTO feedbacks (url, model_verdict, user_verdict, user_comment) 
@@ -39,7 +35,7 @@ def save_feedback(url, model_verdict, user_verdict, user_comment=""):
 
 
 def get_all_feedbacks():
-    """Возвращает все отзывы из БД в виде DataFrame"""
+    # Возвращает все отзывы из БД в виде DataFrame
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(
         "SELECT id, url, model_verdict, user_verdict, user_comment, timestamp "
@@ -51,5 +47,5 @@ def get_all_feedbacks():
 
 
 def get_db_path():
-    """Возвращает путь к файлу БД"""
+    # Возвращает путь к файлу БД
     return DB_PATH

@@ -1,5 +1,4 @@
 import sys
-# import sqlite3
 import os
 import re
 from datetime import datetime, timedelta
@@ -12,11 +11,11 @@ from pathlib import Path
 # Импортируем модуль работы с БД
 from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
+# ИНИЦИАЛИЗАЦИЯ 
 app = Flask(__name__)
 cache = {}
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ 
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -43,7 +42,7 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# ========== ЗАГРУЗКА МОДЕЛИ ==========
+# ЗАГРУЗКА МОДЕЛИ 
 model = None
 feature_columns = []
 features_df = None
@@ -62,7 +61,7 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка: {e}", file=sys.stderr)
 
-# ========== ПРЕДСКАЗАНИЕ (ТОЛЬКО МОДЕЛЬ) ==========
+# ПРЕДСКАЗАНИЕ (ТОЛЬКО МОДЕЛЬ) 
 def predict(url):
     url_lower = url.lower().rstrip('/')
     
@@ -79,7 +78,7 @@ def predict(url):
     
     return 0.5
 
-# ========== ЭНДПОИНТЫ ==========
+# ЭНДПОИНТЫ 
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -112,11 +111,11 @@ def check_url():
     score = predict(url)
     
     if score > 0.7:
-        verdict, text = "dangerous", "🔴 ОПАСНО"
+        verdict, text = "dangerous", "ОПАСНО"
     elif score > 0.4:
-        verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
+        verdict, text = "suspicious", "ПОДОЗРИТЕЛЬНО"
     else:
-        verdict, text = "safe", "🟢 БЕЗОПАСНО"
+        verdict, text = "safe", "БЕЗОПАСНО"
     
     result = {
         'url': raw_url,
