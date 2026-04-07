@@ -361,13 +361,13 @@ if __name__ == '__main__':
     
     fb = FeedbackSystem()
     
-    # Тест со строками
-    fb.add_feedback(
-        url="https://example.com",
-        model_verdict="safe",
-        user_verdict="dangerous",
-        user_comment="Это фишинг!"
-    )
+    # # Тест со строками
+    # fb.add_feedback(
+    #     url="https://example.com",
+    #     model_verdict="safe",
+    #     user_verdict="dangerous",
+    #     user_comment="Это фишинг!"
+    # )
     
     print("\n📊 Статистика:", fb.get_stats())
     
