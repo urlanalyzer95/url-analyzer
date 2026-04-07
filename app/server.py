@@ -15,6 +15,8 @@ from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 app = Flask(__name__)
 cache = {}
 
+init_db()
+
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ 
 def normalize_url(url):
     url = url.strip()
