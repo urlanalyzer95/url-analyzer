@@ -96,6 +96,13 @@
             </div>
           </div>
         </div>
+
+        <!-- Блок для системных сообщений (внизу) -->
+        <div
+          id="systemMessage"
+          class="system-message"
+          style="display: none"
+        ></div>
       </div>
     </div>
 
@@ -171,6 +178,47 @@
       const feedbackSection = document.getElementById("feedbackSection");
       const submitFeedbackBtn = document.getElementById("submitFeedback");
       const cancelFeedbackBtn = document.getElementById("cancelFeedback");
+      const systemMessage = document.getElementById("systemMessage");
+
+      // Функция для показа системного сообщения
+      function showSystemMessage(message, isError = false) {
+        systemMessage.textContent = message;
+        systemMessage.className = "system-message";
+        if (isError) {
+          systemMessage.classList.add("system-message-error");
+        } else {
+          systemMessage.classList.add("system-message-success");
+        }
+        systemMessage.style.display = "block";
+
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+          if (systemMessage.style.display === "block") {
+            systemMessage.style.display = "none";
+          }
+        }, 30000);
+      }
+
+      // Функция для ПОЛНОГО скрытия кнопки (после отправки отзыва)
+      function hideButtonCompletely() {
+        feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "none";
+        // Очищаем форму
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+      }
+
+      // Функция для показа кнопки (при новом URL)
+      function showButton() {
+        feedbackBtn.style.display = "block";
+        feedbackSection.style.display = "none";
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+      }
 
       // Проверка URL
       urlForm.addEventListener("submit", async (e) => {
@@ -179,10 +227,15 @@
         const url = urlInput.value.trim();
         if (!url) return;
 
+        // Скрываем системное сообщение при новом запросе
+        systemMessage.style.display = "none";
+
+        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ
+        showButton();
+
         // Показываем загрузку
         setLoading(true);
         resultContainer.style.display = "none";
-        feedbackSection.style.display = "none";
 
         try {
           const response = await fetch("/check", {
@@ -226,20 +279,22 @@
 
         // Текст результата
         resultBox.innerHTML = `
-                <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>          
-                ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
-            `;
+          <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+          ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+        `;
 
         // Объяснения
         if (data.explanations && data.explanations.length > 0) {
           explanationsDiv.innerHTML = `
-                    <div class="expl-list">
-                        <strong>Обнаружено:</strong>
-                        <ul>
-                            ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
-                        </ul>
-                    </div>
-                `;
+            <div class="expl-list">
+              <strong>Обнаружено:</strong>
+              <ul>
+                ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
+              </ul>
+            </div>
+          `;
+        } else {
+          explanationsDiv.innerHTML = "";
         }
 
         resultContainer.style.display = "block";
@@ -266,21 +321,16 @@
         }
       }
 
-      // Показать форму обратной связи
+      // Нажатие на кнопку "Сообщить об ошибке" - скрываем кнопку, показываем форму
       feedbackBtn.addEventListener("click", () => {
-        feedbackSection.style.display = "block";
         feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "block";
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
-      // Отмена формы обратной связи
+      // Отмена формы обратной связи - показываем кнопку, скрываем форму
       cancelFeedbackBtn.addEventListener("click", () => {
-        feedbackSection.style.display = "none";
-        feedbackBtn.style.display = "block";
-        document
-          .querySelectorAll('input[name="verdict"]')
-          .forEach((r) => (r.checked = false));
-        document.getElementById("commentInput").value = "";
+        showButton();
       });
 
       // Отправка обратной связи
@@ -291,7 +341,7 @@
         const comment = document.getElementById("commentInput").value.trim();
 
         if (!selectedVerdict) {
-          alert("Пожалуйста, выберите вашу оценку");
+          showSystemMessage("Пожалуйста, выберите вашу оценку", true);
           return;
         }
 
@@ -315,15 +365,18 @@
           });
 
           if (response.ok) {
-            alert("✅ Спасибо за отзыв!");
-            feedbackBtn.style.display = "block";
-            cancelFeedbackBtn.click();
+            // ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ УСПЕХЕ
+            showSystemMessage("✅ Спасибо за отзыв!", false);
+            // КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
+            hideButtonCompletely();
           } else {
-            alert("❌ Ошибка при отправке отзыва");
+            showSystemMessage("❌ Ошибка при отправке отзыва", true);
+            showButton();
           }
         } catch (error) {
           console.error(error);
-          alert("❌ Ошибка соединения с сервером");
+          showSystemMessage("❌ Ошибка соединения с сервером", true);
+          showButton();
         } finally {
           submitFeedbackBtn.disabled = false;
           submitFeedbackBtn.textContent = "Отправить отзыв";
