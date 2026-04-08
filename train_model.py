@@ -47,7 +47,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 # 5. Обучаем
 model = RandomForestClassifier(
     n_estimators=150,
-    max_depth=20,
+    max_depth=10,
     random_state=42,
     n_jobs=-1
 )
