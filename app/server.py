@@ -11,12 +11,18 @@ import joblib
 from pathlib import Path
 
 # Импортируем модуль работы с БД
-from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
+# from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 # from db import init_db, save_feedback, get_all_feedbacks, get_db_path
+try:
+    from db import init_db, save_feedback, get_all_feedbacks, get_db_path
+except ImportError:
+    from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
+
 
 
 # ИНИЦИАЛИЗАЦИЯ 
-app = Flask(__name__)
+# app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 cache = {}
 
 init_db()
@@ -256,11 +262,9 @@ def feedback():
 def admin_feedbacks():
     try:
         df = get_all_feedbacks()
-        
         if df.empty:
             return render_template('admin.html', feedbacks=[])
         
-        # Преобразуем данные для шаблона
         feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
@@ -270,10 +274,9 @@ def admin_feedbacks():
                 'model_verdict': row['model_verdict'],
                 'user_verdict': row['user_verdict'],
                 'user_comment': row['user_comment'],
-                'timestamp': row['timestamp'],
-                'mismatch': mismatch
+                'timestamp': row['timestamp'],  
+                'mismatch': mismatch          
             })
-        
         return render_template('admin.html', feedbacks=feedbacks)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
