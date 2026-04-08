@@ -14,6 +14,7 @@ from pathlib import Path
 # from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
+
 # ИНИЦИАЛИЗАЦИЯ 
 # app = Flask(__name__)
 # 
