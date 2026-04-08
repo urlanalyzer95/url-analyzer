@@ -1,3 +1,5 @@
+# server.py - исправленная версия
+
 import sys
 import os
 import re
@@ -44,41 +46,76 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# ЗАГРУЗКА МОДЕЛИ 
+# ЗАГРУЗКА МОДЕЛИ - ИСПРАВЛЕННЫЕ ПУТИ
 model = None
 feature_columns = []
 features_df = None
 
 try:
-    model_path = Path(__file__).parent.parent / 'ml' / 'model_rf_v2.pkl'
+    # Путь к модели - теперь ищем правильный файл
+    model_path = Path(__file__).parent.parent / 'ml' / 'model.pkl'
+    if not model_path.exists():
+        # Альтернативные имена
+        alt_paths = [
+            Path(__file__).parent.parent / 'ml' / 'model_rf_v2.pkl',
+            Path(__file__).parent / 'ml' / 'model.pkl',
+        ]
+        for alt in alt_paths:
+            if alt.exists():
+                model_path = alt
+                break
+    
     if model_path.exists():
         model = joblib.load(model_path)
-        print("✅ Модель загружена", file=sys.stderr)
+        print(f"✅ Модель загружена: {model_path}", file=sys.stderr)
+    else:
+        print(f"⚠️ Модель не найдена по пути: {model_path}", file=sys.stderr)
     
+    # Загрузка датасета с признаками
     dataset_path = Path(__file__).parent.parent / 'data' / 'processed' / 'url_dataset_features_v2.csv'
+    if not dataset_path.exists():
+        dataset_path = Path(__file__).parent.parent / 'data' / 'processed' / 'url_dataset_features.csv'
+    
     if dataset_path.exists():
         features_df = pd.read_csv(dataset_path)
         feature_columns = [c for c in features_df.columns if c not in ['url', 'label']]
         print(f"✅ Датасет: {len(features_df)} записей", file=sys.stderr)
+    else:
+        print(f"⚠️ Датасет не найден: {dataset_path}", file=sys.stderr)
+        
 except Exception as e:
-    print(f"⚠️ Ошибка: {e}", file=sys.stderr)
+    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-# ПРЕДСКАЗАНИЕ (ТОЛЬКО МОДЕЛЬ) 
+# ПРЕДСКАЗАНИЕ 
 def predict(url):
     url_lower = url.lower().rstrip('/')
     
-    if model is not None and features_df is not None:
+    if model is not None and features_df is not None and feature_columns:
         try:
+            # Нормализуем URL в features_df, если ещё нет
             if 'url_norm' not in features_df.columns:
-                features_df['url_norm'] = features_df['url'].apply(lambda x: x.lower().rstrip('/'))
+                features_df['url_norm'] = features_df['url'].apply(lambda x: str(x).lower().rstrip('/') if pd.notna(x) else '')
+            
             row = features_df[features_df['url_norm'] == url_lower]
             if not row.empty:
                 X = row[feature_columns]
-                return float(model.predict_proba(X)[0][1])
+                # Проверяем, что X не пустой и все колонки на месте
+                if not X.empty and len(X.columns) == len(feature_columns):
+                    proba = model.predict_proba(X)
+                    return float(proba[0][1])
         except Exception as e:
-            print(f"ML ошибка: {e}", file=sys.stderr)
+            print(f"ML ошибка при поиске: {e}", file=sys.stderr)
     
-    return 0.5
+    # Если модель не может предсказать, используем эвристики
+    # Простая эвристика: проверка на подозрительные слова
+    suspicious_words = ['login', 'verify', 'account', 'secure', 'update', 'confirm']
+    score = 0.5
+    if any(word in url_lower for word in suspicious_words):
+        score = 0.6
+    if any(word in url_lower for word in ['bit.ly', 'tinyurl', 'goo.gl']):
+        score = 0.55
+    
+    return score
 
 # ЭНДПОИНТЫ 
 @app.route('/')
@@ -130,28 +167,6 @@ def check_url():
     set_cached(url, result)
     return jsonify(result)
 
-# @app.route('/feedback', methods=['POST'])
-# def feedback():
-#     try:
-#         data = request.json
-#         os.makedirs('data', exist_ok=True)
-#         conn = sqlite3.connect('data/feedback.db')
-#         conn.execute('''
-#             CREATE TABLE IF NOT EXISTS feedbacks (
-#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                 url TEXT, model_verdict TEXT, user_verdict TEXT,
-#                 user_comment TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-#             )
-#         ''')
-#         conn.execute('INSERT INTO feedbacks (url, model_verdict, user_verdict, user_comment) VALUES (?, ?, ?, ?)',
-#                      (data.get('url'), data.get('model_verdict'), data.get('user_verdict'), data.get('comment', '')))
-#         conn.commit()
-#         conn.close()
-#         return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
-#     except Exception as e:
-#         return jsonify({'status': 'error', 'error': str(e)}), 500
-
-
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
@@ -170,10 +185,6 @@ def feedback():
 def admin_feedbacks():
     try:
         df = get_all_feedbacks()
-         
-        # conn = sqlite3.connect('data/feedback.db')
-        # df = pd.read_sql_query("SELECT id, url, model_verdict, user_verdict, user_comment, timestamp FROM feedbacks ORDER BY timestamp DESC", conn)
-        # conn.close()
         
         if df.empty:
             return '<h1>📋 Отзывы</h1><p>Пока нет</p><a href="/">На главную</a>'
@@ -201,9 +212,7 @@ def admin_feedbacks():
 
 @app.route('/download-db')
 def download_db():
-    """Скачать БД с отзывами"""
     db_path = get_db_path()
-    # db_path = '/app/data/feedback.db'
     
     if os.path.exists(db_path):
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
