@@ -13,7 +13,16 @@ safe_urls = [
     'https://google.com',
     'https://yandex.ru',
     'https://github.com',
-    'https://stackoverflow.com'
+    'https://stackoverflow.com',
+    'https://vk.com',
+    'https://wikipedia.org',
+    'https://youtube.com',
+    'https://instagram.com',
+    'https://facebook.com',
+    'https://twitter.com',
+    'https://amazon.com',
+    'https://apple.com',
+    'https://microsoft.com',
 ]
 
 safe_features = [extract_features(url) for url in safe_urls]
