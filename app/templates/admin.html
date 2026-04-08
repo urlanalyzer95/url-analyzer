@@ -59,6 +59,22 @@
         }
         .url-cell a:hover { text-decoration: underline; }
         .empty-msg { padding: 20px; color: #6b7280; font-style: italic; }
+
+        /* Подсветка строки с расхождением вердиктов */
+        tr.row-mismatch {
+            background-color: #fee2e2;  /* Светло-красный фон */
+        }
+        tr.row-mismatch:hover {
+            background-color: #fecaca;  /* Чуть темнее при наведении */
+        }
+
+        /* Обычная подсветка строки при наведении */
+        tbody tr:hover {
+            background-color: #f9fafb;
+        }
+        tbody tr.row-mismatch:hover {
+            background-color: #fecaca;
+        }
     </style>
 </head>
 <body>
@@ -83,7 +99,7 @@
         </thead>
         <tbody>
             {% for fb in feedbacks %}
-            <tr>
+            <tr class="{% if fb.model_verdict != fb.user_verdict %}row-mismatch{% endif %}">
                 <td>{{ fb.id }}</td>
                 <td class="url-cell">
                     <a href="{{ fb.url }}" target="_blank" title="{{ fb.url }}">
