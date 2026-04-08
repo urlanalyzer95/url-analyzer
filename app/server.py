@@ -11,8 +11,8 @@ import joblib
 from pathlib import Path
 
 # Импортируем модуль работы с БД
-# from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
-from db import init_db, save_feedback, get_all_feedbacks, get_db_path
+from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
+# from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
 
 # ИНИЦИАЛИЗАЦИЯ 
