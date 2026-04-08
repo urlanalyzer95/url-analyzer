@@ -284,18 +284,42 @@ def admin_feedbacks():
 
 
 
-@app.route('/admin/download-db')
-# @app.route('/download-db')
+# @app.route('/admin/download-db')
+# # @app.route('/download-db')
+# def download_db():
+#     db_path = get_db_path()
+    
+#     if os.path.exists(db_path):
+#         return send_file(db_path, as_attachment=True, download_name='feedback.db')
+    
+#     if os.path.exists('data/feedback.db'):
+#         return send_file('data/feedback.db', as_attachment=True, download_name='feedback.db')
+    
+#     return "❌ БД не найдена", 404
+
+
+
+@app.route('/admin/download-db')  # ✅ Добавлен маршрут под админку
+@app.route('/download-db')        # ✅ Оставлен старый маршрут для совместимости
 def download_db():
-    db_path = get_db_path()
-    
-    if os.path.exists(db_path):
+    try:
+        # Формируем абсолютный путь относительно папки, где лежит server.py
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(base_dir, 'data', 'feedback.db')
+
+        if not os.path.exists(db_path):
+            return "❌ Файл feedback.db не найден в папке data/", 404
+
+        # send_file безопасно отдаёт файл
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
-    
-    if os.path.exists('data/feedback.db'):
-        return send_file('data/feedback.db', as_attachment=True, download_name='feedback.db')
-    
-    return "❌ БД не найдена", 404
+        
+    except PermissionError:
+        return "❌ Нет прав на чтение файла БД. Проверьте права доступа к папке data/", 403
+    except Exception as e:
+        print(f"[ERROR] Ошибка при скачивании БД: {e}", file=sys.stderr)
+        return f"❌ Внутренняя ошибка сервера: {e}", 500
+
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
