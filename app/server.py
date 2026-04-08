@@ -16,10 +16,7 @@ from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
 
 # ИНИЦИАЛИЗАЦИЯ 
-# app = Flask(__name__)
-# 
-app = Flask(__name__, template_folder='templates')
-# 
+app = Flask(__name__)
 cache = {}
 
 init_db()
