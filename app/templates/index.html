@@ -227,6 +227,8 @@
         const url = urlInput.value.trim();
         if (!url) return;
 
+        currentUrl = url;
+
         // Скрываем системное сообщение при новом запросе
         systemMessage.style.display = "none";
 
