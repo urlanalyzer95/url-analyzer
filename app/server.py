@@ -219,36 +219,67 @@ def feedback():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
+# @app.route('/admin/feedbacks')
+# def admin_feedbacks():
+#     try:
+#         df = get_all_feedbacks()
+        
+        # if df.empty:
+        #     return '<h1>📋 Отзывы</h1><p>Пока нет</p><a href="/">На главную</a>'
+        
+        # html = '<h1>📋 Отзывы</h1><a href="/">← На главную</a><br><br>'
+        # html += '<table border="1" cellpadding="5">'
+        # html += '<tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Комментарий</th><th>Дата</th></tr>'
+        
+        # for _, row in df.iterrows():
+        #     mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
+        #     style = 'style="background-color:#ffebee;"' if mismatch else ''
+        #     html += f'<tr {style}>'
+        #     html += f'<td>{row["id"]}</td>'
+        #     html += f'<td style="max-width:400px; word-break:break-all;">{row["url"][:80]}</td>'
+        #     html += f'<td>{row["model_verdict"]}</td>'
+        #     html += f'<td style="font-weight:bold;">{row["user_verdict"]}</td>'
+        #     html += f'<td>{row["user_comment"][:50] if row["user_comment"] else "-"}</td>'
+        #     html += f'<td>{row["timestamp"][:16] if row["timestamp"] else "-"}</td>'
+        #     html += '</tr>'
+        # 
+    #     html += '</table><p><a href="/download-db">📥 Скачать БД с отзывами</a></p>'
+    #     return html
+    # except Exception as e:
+    #     return f'<h1>Ошибка</h1><p>{e}</p>'
+
+
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
     try:
         df = get_all_feedbacks()
         
         if df.empty:
-            return '<h1>📋 Отзывы</h1><p>Пока нет</p><a href="/">На главную</a>'
+            return render_template('admin.html', feedbacks=[])
         
-        html = '<h1>📋 Отзывы</h1><a href="/">← На главную</a><br><br>'
-        html += '<table border="1" cellpadding="5">'
-        html += '<tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Комментарий</th><th>Дата</th></tr>'
-        
+        # Преобразуем данные для шаблона
+        feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
-            style = 'style="background-color:#ffebee;"' if mismatch else ''
-            html += f'<tr {style}>'
-            html += f'<td>{row["id"]}</td>'
-            html += f'<td style="max-width:400px; word-break:break-all;">{row["url"][:80]}</td>'
-            html += f'<td>{row["model_verdict"]}</td>'
-            html += f'<td style="font-weight:bold;">{row["user_verdict"]}</td>'
-            html += f'<td>{row["user_comment"][:50] if row["user_comment"] else "-"}</td>'
-            html += f'<td>{row["timestamp"][:16] if row["timestamp"] else "-"}</td>'
-            html += '</tr>'
+            feedbacks.append({
+                'id': row['id'],
+                'url': row['url'],
+                'model_verdict': row['model_verdict'],
+                'user_verdict': row['user_verdict'],
+                'user_comment': row['user_comment'],
+                'timestamp': row['timestamp'],
+                'mismatch': mismatch
+            })
         
-        html += '</table><p><a href="/download-db">📥 Скачать БД с отзывами</a></p>'
-        return html
+        return render_template('admin.html', feedbacks=feedbacks)
     except Exception as e:
-        return f'<h1>Ошибка</h1><p>{e}</p>'
+        return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
-@app.route('/download-db')
+
+
+
+@app.route('/admin/download-db')
+# @app.route('/download-db')
 def download_db():
     db_path = get_db_path()
     
