@@ -13,6 +13,12 @@ def extract_features(url):
     features.append(url.count('/'))  # num_slashes
     features.append(len(re.findall(r'[?&]', url)))  # num_params
 
+    trusted_brands = [
+        'google', 'yandex', 'vk', 'wikipedia',
+        'github', 'youtube', 'facebook'
+    ]
+
+    features.append(1 if any(b in url for b in trusted_brands) else 0)
     # БЕЗОПАСНОСТЬ
     features.append(1 if re.search(r'\d{1,3}(\.\d{1,3}){3}', url) else 0)  # has_ip
     features.append(1 if url.startswith('https') else 0)  # has_https
