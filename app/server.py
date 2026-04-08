@@ -46,40 +46,34 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# ЗАГРУЗКА МОДЕЛИ - ИСПРАВЛЕННЫЕ ПУТИ
+# server.py - ИСПРАВЛЕННЫЕ ПУТИ
+
+# ЗАГРУЗКА МОДЕЛИ 
 model = None
 feature_columns = []
 features_df = None
 
+# Определяем базовую директорию
+BASE_DIR = Path(__file__).parent.parent  # это корень проекта
+
 try:
-    # Путь к модели - теперь ищем правильный файл
-    model_path = Path(__file__).parent.parent / 'ml' / 'model.pkl'
-    if not model_path.exists():
-        # Альтернативные имена
-        alt_paths = [
-            Path(__file__).parent.parent / 'ml' / 'model_rf_v2.pkl',
-            Path(__file__).parent / 'ml' / 'model.pkl',
-        ]
-        for alt in alt_paths:
-            if alt.exists():
-                model_path = alt
-                break
+    # ПРАВИЛЬНЫЙ ПУТЬ - ТАКОЙ ЖЕ, КАК В train_model.py
+    model_path = BASE_DIR / 'ml' / 'model.pkl'
     
     if model_path.exists():
         model = joblib.load(model_path)
-        print(f"✅ Модель загружена: {model_path}", file=sys.stderr)
+        print(f"✅ Модель загружена из {model_path}", file=sys.stderr)
     else:
-        print(f"⚠️ Модель не найдена по пути: {model_path}", file=sys.stderr)
+        print(f"⚠️ Модель не найдена: {model_path}", file=sys.stderr)
+        print(f"   Сначала запустите: python ml/train_model.py", file=sys.stderr)
     
-    # Загрузка датасета с признаками
-    dataset_path = Path(__file__).parent.parent / 'data' / 'processed' / 'url_dataset_features_v2.csv'
-    if not dataset_path.exists():
-        dataset_path = Path(__file__).parent.parent / 'data' / 'processed' / 'url_dataset_features.csv'
+    # Датасет - тоже правильный путь
+    dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
     
     if dataset_path.exists():
         features_df = pd.read_csv(dataset_path)
         feature_columns = [c for c in features_df.columns if c not in ['url', 'label']]
-        print(f"✅ Датасет: {len(features_df)} записей", file=sys.stderr)
+        print(f"✅ Датасет загружен: {len(features_df)} записей", file=sys.stderr)
     else:
         print(f"⚠️ Датасет не найден: {dataset_path}", file=sys.stderr)
         
