@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table, th, td { border: 1px solid black; border-collapse: collapse; padding: 8px; }
+        .mismatch { background-color: #ffebee; }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { display: inline-block; padding: 10px 20px; margin: 10px; background-color: #4CAF50; color: white; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>📋 Отзывы пользователей</h1>
+    
+    <a href="/" class="button">← На главную</a>
+    <a href="/admin/download-db" class="button">📥 Скачать БД с отзывами</a>
+    
+    {% if feedbacks %}
+        <table>
+            <thead>
+                <tr><th>ID</th><th>URL</th><th>Вердикт модели</th><th>Вердикт пользователя</th><th>Комментарий</th><th>Дата</th></tr>
+            </thead>
+            <tbody>
+                {% for fb in feedbacks %}
+                    <tr {% if fb.mismatch %}class="mismatch"{% endif %}>
+                        <td>{{ fb.id }}</td>
+                        <td style="max-width:400px; word-break:break-all;">{{ fb.url[:80] }}{% if fb.url|length > 80 %}...{% endif %}</td>
+                        <td>{{ fb.model_verdict }}</td>
+                        <td style="font-weight:bold;">{{ fb.user_verdict }}</td>
+                        <td>{{ fb.user_comment[:50] if fb.user_comment else "-" }}{% if fb.user_comment and fb.user_comment|length > 50 %}...{% endif %}</td>
+                        <td>{{ fb.timestamp[:16] if fb.timestamp else "-" }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Пока нет отзывов</p>
+    {% endif %}
+</body>
+</html>
