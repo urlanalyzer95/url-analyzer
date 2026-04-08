@@ -11,10 +11,14 @@ import joblib
 from pathlib import Path
 
 # Импортируем модуль работы с БД
-from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
+# from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
+from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
 # ИНИЦИАЛИЗАЦИЯ 
-app = Flask(__name__)
+# app = Flask(__name__)
+# 
+app = Flask(__name__, template_folder='templates')
+# 
 cache = {}
 
 init_db()
@@ -54,7 +58,8 @@ feature_columns = []
 features_df = None
 
 # Определяем базовую директорию
-BASE_DIR = Path(__file__).parent.parent  # это корень проекта
+# BASE_DIR = Path(__file__).parent.parent  # это корень проекта
+BASE_DIR = Path(__file__).parent 
 
 try:
     # ПРАВИЛЬНЫЙ ПУТЬ - ТАКОЙ ЖЕ, КАК В train_model.py
