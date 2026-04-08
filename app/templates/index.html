@@ -1,387 +1,385 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Проверка URL ссылки</title>
-    <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg" />
-    <link rel="stylesheet" href="/static/style.css" />
-  </head>
-  <body>
-    <div class="wrapper">
-      <div class="card">
-        <h1>Проверка ссылки</h1>
-        <p class="description">
-          Введите URL адрес сайта для проверки на фишинг.
-        </p>
+ <head>
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <title>Проверка URL-ссылки</title>
+ <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg" />
+ <link rel="stylesheet" href="/static/style.css" />
+ </head>
+ <body>
+ <div class="wrapper">
+ <div class="карточка">
+ <h1>Проверка ссылки</h1>
+ <p class="описание">
+ Введите URL адрес сайта для проверки на фишинг.
+ </p>
 
-        <form class="url-form" id="urlForm">
-          <div class="input-group">
-            <input
-              type="text"
-              id="urlInput"
-              placeholder="https://example.com"
-              required
-            />
-          </div>
-          <button type="submit" class="btn-check" id="checkBtn">
-            Проверить
-          </button>
-        </form>
+ <класс формы="url-форма" id="urlForm">
+ <div class="input-group">
+ <input
+ type="text"
+ id="urlInput"
+ placeholder="https://example.com"
+ required
+ />
+ </div>
+ <button type="submit" class="btn-check" id="checkBtn">
+ Проверить
+ </кнопка>
+ </форма>
 
-        <!-- Индикатор загрузки -->
-        <div class="loader-container" id="loader">
-          <div class="loader"></div>
-          <span class="loader-text">Анализируем ссылку...</span>
-        </div>
+ <!-- Индикатор загрузки -->
+ <div class="загрузчик-контейнер" id="загрузчик">
+ <div class="загрузчик"></div>
+ <span class="loader-text">Анализируем ссылку...</span>
+ </div>
 
-        <!-- Результаты проверки -->
-        <div id="resultContainer" style="display: none">
-          <div class="result-box" id="resultBox"></div>
+ <!-- Результаты проверки -->
+ <div id="resultContainer" style="display: none">
+ <div class="result-box" id="resultBox"></div>
 
-          <!-- Объяснения -->
-          <div class="explanations" id="explanations"></div>
+ <!-- Пояснения -->
+ <div class="explanations" id="explanations"></div>
 
-          <!-- Кнопка обратной связи -->
-          <button class="btn-report-error" id="feedbackBtn">
-            Сообщить об ошибке
-          </button>
+ <!-- Кнопка обратной связи -->
+ <button class="btn-report-error" id="feedbackBtn">
+ Сообщить об ошибке
+ </button>
 
-          <!-- Форма обратной связи -->
-          <div
-            class="feedback-section"
-            id="feedbackSection"
-            style="display: none"
-          >
-            <h3>Ваша оценка</h3>
-            <div class="radio-group">
-              <input
-                type="radio"
-                id="danger"
-                name="verdict"
-                value="dangerous"
-              />
-              <label for="danger" class="radio-label label-danger"
-                >Опасно</label
-              >
+ <!-- Форма обратной связи -->
+ <div
+ class="feedback-section"
+ id="feedbackSection"
+ style="display: none"
+ >
+ <h3>Ваша оценка</h3>
+ <div class="radio-group">
+ <input
+ type="radio"
+ id="danger"
+ name="verdict"
+ value="dangerous"
+ />
+ <label for="danger" class="radio-label label-danger"
+ >Опасно</label
+ >
 
-              <input
-                type="radio"
-                id="suspicious"
-                name="verdict"
-                value="suspicious"
-              />
-              <label for="suspicious" class="radio-label label-suspicious"
-                >Подозрительно</label
-              >
+ <input
+ type="radio"
+ id="suspicious"
+ name="verdict"
+ value="suspicious"
+ />
+ <label for="suspicious" class="radio-label label-suspicious"
+ >Подозрительно</label
+ >
 
-              <input type="radio" id="safe" name="verdict" value="safe" />
-              <label for="safe" class="radio-label label-safe">Безопасно</label>
+ <input type="radio" id="safe" name="verdict" value="safe" />
+ <label for="safe" class="radio-label label-safe">Безопасно</label>
 
-              <input type="radio" id="other" name="verdict" value="other" />
-              <label for="other" class="radio-label label-other">Другое</label>
-            </div>
+ <тип ввода="радио" id="другое" name="вердикт" value="другое" />
+ <label for="другое" class="радио-метка label-other">Другое</label>
+ </div>
 
-            <textarea
-              class="comment-input"
-              id="commentInput"
-              placeholder="Комментарий (необязательно)"
-            ></textarea>
+ <текстовая область 
+ class="комментарий-ввод"
+ id="commentInput" (Ввод комментария)
+ placeholder="Комментарий (необязательно)"
+ ></textarea>
+ <div class="feedback-buttons">
+ <button class="btn-feedback" id="submitFeedback">
+ Отправить отзыв
+ </button>
+ <button class="btn-cancel" id="cancelFeedback">Отмена</button>
+ </div>
+ </div>
+ </div>
 
-            <div class="feedback-buttons">
-              <button class="btn-feedback" id="submitFeedback">
-                Отправить отзыв
-              </button>
-              <button class="btn-cancel" id="cancelFeedback">Отмена</button>
-            </div>
-          </div>
-        </div>
+ <!-- Блок для системных сообщений (внизу) -->
+ <div 
+ id="Системное сообщение"
+ class="системное сообщение"
+ style="отображение: отсутствует"
+ ></div>
+ </div>
+ </div>
 
-        <!-- Блок для системных сообщений (внизу) -->
-        <div
-          id="systemMessage"
-          class="system-message"
-          style="display: none"
-        ></div>
-      </div>
-    </div>
+ <класс нижнего колонтитула="нижний колонтитул">
+ <класс нижнего колонтитула="содержимое нижнего колонтитула">
+ <класс нижнего колонтитула="логотип нижнего колонтитула">
+ <img src="/static/faviconka.svg" alt="Логотип" class="Значок нижнего колонтитула" />
+ <span class="footer-brand">Анализатор URL</span>
+ </div>
+ <div class="footer-section">
+ <h4>Модель</h4>
+ <p>
+ <span style="white-space: nowrap; margin-right: 20px"
+ >Случайный лес</span
+ >
+ <span style="пробел: nowrap"
+ >Точность: <span class="model-accuracy">94%</span></span
+ >
+ </p>
+ </div>
 
-    <footer class="footer">
-      <div class="footer-content">
-        <div class="footer-logo">
-          <img src="/static/faviconka.svg" alt="Logo" class="footer-icon" />
-          <span class="footer-brand">URL Analyzer</span>
-        </div>
+ <класс div="нижний колонтитул">
+ <h4>Проект</h4>
+ <p>Анализатор подозрительности URL</p>
+ </div>
 
-        <div class="footer-section">
-          <h4>Модель</h4>
-          <p>
-            <span style="white-space: nowrap; margin-right: 20px"
-              >Random Forest</span
-            >
-            <span style="white-space: nowrap"
-              >Точность: <span class="model-accuracy">94%</span></span
-            >
-          </p>
-        </div>
+ <класс div="нижний колонтитул">
+ <h4>Ссылки</h4>
+ <p>
+ <a
+ href="https://github.com/urlanalyzer95/url-analyzer"
+ class="footer-link"
+ style="white-space: nowrap; margin-right: 20px"
+ >GitHub</a
+ >
+ <a class="footer-link" style="white-space: nowrap"
+ >urlanalyzer95@gmail.com</a
+ >
+ </p>
+ </div>
 
-        <div class="footer-section">
-          <h4>Проект</h4>
-          <p>Анализатор подозрительности URL</p>
-        </div>
+ <класс div="нижний колонтитул">
+ <h4>Статус</h4>
+ <p>
+ <span style="пробел: nowrap; правое поле: 20 пикселей">
+ <span class="status-dot"></span> Онлайн
+ </span>
+ <span style="пробел: nowrap">Версия 2.0</span>
+ </p>
+ </div>
+ </div>
 
-        <div class="footer-section">
-          <h4>Ссылки</h4>
-          <p>
-            <a
-              href="https://github.com/urlanalyzer95/url-analyzer"
-              class="footer-link"
-              style="white-space: nowrap; margin-right: 20px"
-              >GitHub</a
-            >
-            <a class="footer-link" style="white-space: nowrap"
-              >urlanalyzer95@gmail.com</a
-            >
-          </p>
-        </div>
+ <класс div="нижний колонтитул">
+ <p>© 2026 Команда разработчиков. Все права защищены.</p>
+ </div>
+ </footer>
 
-        <div class="footer-section">
-          <h4>Статус</h4>
-          <p>
-            <span style="white-space: nowrap; margin-right: 20px">
-              <span class="status-dot"></span> Онлайн
-            </span>
-            <span style="white-space: nowrap">Версия 2.0</span>
-          </p>
-        </div>
-      </div>
+ <script>
+ // Глобальная переменная для хранения текущего URL и вердикта модели
+ let currentUrl = "";
+ let currentModelVerdict = "";
 
-      <div class="footer-bottom">
-        <p>© 2026 Команда разработчиков. Все права защищены.</p>
-      </div>
-    </footer>
+ // Элементы DOM
+ const urlForm = document.getElementById("urlForm");
+ const urlInput = document.getElementById("urlInput");
+ const checkBtn = document.getElementById("checkBtn");
+ const loader = document.getElementById("loader");
+ const resultContainer = document.getElementById("resultContainer");
+ const resultBox = document.getElementById("resultBox");
+ const explanationsDiv = document.getElementById("explanations");
+ const feedbackBtn = document.getElementById("feedbackBtn");
+ const feedbackSection = document.getElementById("feedbackSection");
+ const submitFeedbackBtn = document.getElementById("submitFeedback");
+ const cancelFeedbackBtn = document.getElementById("cancelFeedback");
+ const systemMessage = document.getElementById("systemMessage");
+ // Функция для отображения системного сообщения
+ function showSystemMessage(message, isError = false) {
+ systemMessage.textContent = message;
+ systemMessage.className = "system-message";
+ if (isError) {
+ systemMessage.classList.add("system-message-error");
+ } else {
+ systemMessage.classList.add("system-message-success");
+ }
+ systemMessage.style.display = "block";
+ // Автоматически скрываем через 30 секунд
+ setTimeout(() => {
+ if (systemMessage.style.display === "block") {
+ systemMessage.style.display = "none";
+ }
+ }, 30000);
+ }
 
-    <script>
-      // Глобальная переменная для хранения текущего URL и вердикта модели
-      let currentUrl = "";
-      let currentModelVerdict = "";
+ // Функция для ПОЛНОГО скрытия кнопки (после отправки отзыва)
+ function hideButtonCompletely() {
+ feedbackBtn.style.display = "none";
+ feedbackSection.style.display = "none";
+ // Очищаем форму
+ document
+ .querySelectorAll('input[name="verdict"]')
+ .forEach((r) => (r.checked = false));
+ document.getElementById("commentInput").value = "";
+ }
 
-      // Элементы DOM
-      const urlForm = document.getElementById("urlForm");
-      const urlInput = document.getElementById("urlInput");
-      const checkBtn = document.getElementById("checkBtn");
-      const loader = document.getElementById("loader");
-      const resultContainer = document.getElementById("resultContainer");
-      const resultBox = document.getElementById("resultBox");
-      const explanationsDiv = document.getElementById("explanations");
-      const feedbackBtn = document.getElementById("feedbackBtn");
-      const feedbackSection = document.getElementById("feedbackSection");
-      const submitFeedbackBtn = document.getElementById("submitFeedback");
-      const cancelFeedbackBtn = document.getElementById("cancelFeedback");
-      const systemMessage = document.getElementById("systemMessage");
+ // Функция для отображения кнопки (при переходе на новый URL)
+ function showButton() {
+ feedbackBtn.style.display = "block";
+ feedbackSection.style.display = "none";
+ document
+ .querySelectorAll('input[name="verdict"]')
+ .forEach((r) => (r.checked = false));
+ document.getElementById("commentInput").value = "";
+ }
 
-      // Функция для показа системного сообщения
-      function showSystemMessage(message, isError = false) {
-        systemMessage.textContent = message;
-        systemMessage.className = "system-message";
-        if (isError) {
-          systemMessage.classList.add("system-message-error");
-        } else {
-          systemMessage.classList.add("system-message-success");
-        }
-        systemMessage.style.display = "block";
+ // Проверка URL
+ urlForm.addEventListener("submit", async (e) => {
+ e.preventDefault();
 
-        // Автоматически скрываем через 5 секунд
-        setTimeout(() => {
-          if (systemMessage.style.display === "block") {
-            systemMessage.style.display = "none";
-          }
-        }, 30000);
-      }
+ const url = urlInput.value.trim();
+ if (!url) return;
 
-      // Функция для ПОЛНОГО скрытия кнопки (после отправки отзыва)
-      function hideButtonCompletely() {
-        feedbackBtn.style.display = "none";
-        feedbackSection.style.display = "none";
-        // Очищаем форму
-        document
-          .querySelectorAll('input[name="verdict"]')
-          .forEach((r) => (r.checked = false));
-        document.getElementById("commentInput").value = "";
-      }
+ // ✅ ИСПРАВЛЕНИЕ: ВСЕГДА обновляем currentUrl из поля ввода
+ currentUrl = url;
 
-      // Функция для показа кнопки (при новом URL)
-      function showButton() {
-        feedbackBtn.style.display = "block";
-        feedbackSection.style.display = "none";
-        document
-          .querySelectorAll('input[name="verdict"]')
-          .forEach((r) => (r.checked = false));
-        document.getElementById("commentInput").value = "";
-      }
+ // Скрываем системное сообщение при новом запросе
+ systemMessage.style.display = "none";
 
-      // Проверка URL
-      urlForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
+ // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ
+ showButton();
 
-        const url = urlInput.value.trim();
-        if (!url) return;
+ // Показываем загрузку
+ setLoading(true);
+ resultContainer.style.display = "none";
 
-        // Скрываем системное сообщение при новом запросе
-        systemMessage.style.display = "none";
+ try {
+ const response = await fetch("/check", {
+ method: "POST",
+ headers: {
+ "Content-Type": "application/json",
+ },
+ body: JSON.stringify({ url: url }),
+ });
 
-        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ
-        showButton();
+ const data = await response.json();
 
-        // Показываем загрузку
-        setLoading(true);
-        resultContainer.style.display = "none";
+ if (response.ok) {
+ displayResult(data);
+ // currentUrl уже установлен выше
+ currentModelVerdict = data.verdict;
+ } else {
+ showError(data.error || "Ошибка проверки URL");
+ }
+ } catch (error) {
+ showError("Ошибка соединения с сервером");
+ console.error(error);
+ } finally {
+ setLoading(false);
+ }
+ });
 
-        try {
-          const response = await fetch("/check", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ url: url }),
-          });
+ // Отображение результатов
+ function displayResult(data) {
+ // Устанавливаем класс для цвета
+ resultBox.className = "result-box";
+ if (data.verdict === "dangerous") {
+ resultBox.classList.add("dangerous");
+ } else if (data.verdict === "suspicious") {
+ resultBox.classList.add("suspicious");
+ } else if (data.verdict === "safe") {
+ resultBox.classList.add("safe");
+ } else {
+ resultBox.classList.add("error");
+ }
 
-          const data = await response.json();
+ // Текст результата
+ resultBox.innerHTML = `
+ <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+ ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+ `;
 
-          if (response.ok) {
-            displayResult(data);
-            currentUrl = data.url;
-            currentModelVerdict = data.verdict;
-          } else {
-            showError(data.error || "Ошибка проверки URL");
-          }
-        } catch (error) {
-          showError("Ошибка соединения с сервером");
-          console.error(error);
-        } finally {
-          setLoading(false);
-        }
-      });
+ // Объяснения
+ if (данные.пояснения && data.пояснения.длина > 0) {
+ explanationsDiv.innerHTML = `
+ <div class="expl-список">
+ <strong>Обнаружено:</strong>
+ <ul>
+ ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
+ </ul>
+ </div>
+ `;
+ } else {
+ explanationsDiv.innerHTML = "";
+ }
 
-      // Отображение результатов
-      function displayResult(data) {
-        // Устанавливаем класс для цвета
-        resultBox.className = "result-box";
-        if (data.verdict === "dangerous") {
-          resultBox.classList.add("dangerous");
-        } else if (data.verdict === "suspicious") {
-          resultBox.classList.add("suspicious");
-        } else if (data.verdict === "safe") {
-          resultBox.classList.add("safe");
-        } else {
-          resultBox.classList.add("error");
-        }
+ resultContainer.style.display = "block";
+ }
 
-        // Текст результата
-        resultBox.innerHTML = `
-          <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
-          ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
-        `;
+ // Отображение ошибки
+ function showError(message) {
+ resultBox.className = "result-box error";
+ resultBox.innerHTML = `<div>❌ ${message}</div>`;
+ explanationsDiv.innerHTML = "";
+ resultContainer.style.display = "block";
+ }
 
-        // Объяснения
-        if (data.explanations && data.explanations.length > 0) {
-          explanationsDiv.innerHTML = `
-            <div class="expl-list">
-              <strong>Обнаружено:</strong>
-              <ul>
-                ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
-              </ul>
-            </div>
-          `;
-        } else {
-          explanationsDiv.innerHTML = "";
-        }
+ // Отображение/скрытие загрузки
+ function setLoading(loading) {
+ loader.style.display = loading ? "flex" : "none";
+ checkBtn.disabled = loading;
+ if (loading) {
+ checkBtn.classList.add("disabled");
+ checkBtn.textContent = "Проверка...";
+ } else {
+ checkBtn.classList.remove("disabled");
+ checkBtn.textContent = "Проверить";
+ }
+ }
 
-        resultContainer.style.display = "block";
-      }
+ // Нажатие на кнопку «Сообщить об ошибке» — скрываем кнопку, показываем форму
+ feedbackBtn.addEventListener("click", () => {
+ feedbackBtn.style.display = "none";
+ feedbackSection.style.display = "block";
+ feedbackSection.scrollIntoView({ behavior: "smooth" });
+ });
 
-      // Показ ошибки
-      function showError(message) {
-        resultBox.className = "result-box error";
-        resultBox.innerHTML = `<div>❌ ${message}</div>`;
-        explanationsDiv.innerHTML = "";
-        resultContainer.style.display = "block";
-      }
+ // Отмена обратной связи — показываем кнопку, скрываем форму
+ cancelFeedbackBtn.addEventListener("click", () => {
+ showButton();
+ });
 
-      // Показ/скрытие загрузки
-      function setLoading(loading) {
-        loader.style.display = loading ? "flex" : "none";
-        checkBtn.disabled = loading;
-        if (loading) {
-          checkBtn.classList.add("disabled");
-          checkBtn.textContent = "Проверка...";
-        } else {
-          checkBtn.classList.remove("disabled");
-          checkBtn.textContent = "Проверить";
-        }
-      }
+ // Отправка обратной связи
+ submitFeedbackBtn.addEventListener("click", async () => {
+ const selectedVerdict = document.querySelector(
+ 'input[name="verdict"]:checked',
+ );
+ const comment = document.getElementById("commentInput").value.trim();
 
-      // Нажатие на кнопку "Сообщить об ошибке" - скрываем кнопку, показываем форму
-      feedbackBtn.addEventListener("click", () => {
-        feedbackBtn.style.display = "none";
-        feedbackSection.style.display = "block";
-        feedbackSection.scrollIntoView({ behavior: "smooth" });
-      });
+ if (!selectedVerdict) {
+ showSystemMessage("Пожалуйста, выберите свою оценку", true);
+ return;
+ }
 
-      // Отмена формы обратной связи - показываем кнопку, скрываем форму
-      cancelFeedbackBtn.addEventListener("click", () => {
-        showButton();
-      });
+ const feedbackData = {
+ url: currentUrl, // ✅ Теперь currentUrl всегда актуален
+ model_verdict: currentModelVerdict,
+ user_verdict: selectedVerdict.value,
+ comment: comment,
+ };
 
-      // Отправка обратной связи
-      submitFeedbackBtn.addEventListener("click", async () => {
-        const selectedVerdict = document.querySelector(
-          'input[name="verdict"]:checked',
-        );
-        const comment = document.getElementById("commentInput").value.trim();
+ try {
+ submitFeedbackBtn.disabled = true;
+ submitFeedbackBtn.textContent = "Отправка...";
+ const response = await fetch("/feedback", {
+ method: "POST",
+ headers: {
+ "Content-Type": "application/json",
+ },
+ body: JSON.stringify(feedbackData),
+ });
 
-        if (!selectedVerdict) {
-          showSystemMessage("Пожалуйста, выберите вашу оценку", true);
-          return;
-        }
-
-        const feedbackData = {
-          url: currentUrl,
-          model_verdict: currentModelVerdict,
-          user_verdict: selectedVerdict.value,
-          comment: comment,
-        };
-
-        try {
-          submitFeedbackBtn.disabled = true;
-          submitFeedbackBtn.textContent = "Отправка...";
-
-          const response = await fetch("/feedback", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(feedbackData),
-          });
-
-          if (response.ok) {
-            // ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ УСПЕХЕ
-            showSystemMessage("✅ Спасибо за отзыв!", false);
-            // КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
-            hideButtonCompletely();
-          } else {
-            showSystemMessage("❌ Ошибка при отправке отзыва", true);
-            showButton();
-          }
-        } catch (error) {
-          console.error(error);
-          showSystemMessage("❌ Ошибка соединения с сервером", true);
-          showButton();
-        } finally {
-          submitFeedbackBtn.disabled = false;
-          submitFeedbackBtn.textContent = "Отправить отзыв";
-        }
-      });
-    </script>
-  </body>
+ if (response.ok) {
+ // ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ УСПЕШНОЙ ОТПРАВКЕ
+ showSystemMessage("✅ Спасибо за отзыв!", false);
+ // КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
+ hideButtonCompletely();
+ } else {
+ showSystemMessage("❌ Ошибка при отправке отзыва", true);
+ showButton();
+ }
+ } catch (error) {
+ console.error(error);
+ showSystemMessage("❌ Ошибка соединения с сервером", true);
+ showButton();
+ } finally {
+ submitFeedbackBtn.disabled = false;
+ submitFeedbackBtn.textContent = "Отправить отзыв";
+ }
+ });
+ </script>
+ </body>
 </html>
