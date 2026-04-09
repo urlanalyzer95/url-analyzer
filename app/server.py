@@ -218,13 +218,23 @@ def check_url():
 def feedback():
     try:
         data = request.json
-        save_feedback(
-            data.get('url'),
-            data.get('model_verdict'),
-            data.get('user_verdict'),
-            data.get('comment', '')
-        )
+        url = data.get('url', '').strip()
+        model_verdict = data.get('model_verdict', '')
+        user_verdict = data.get('user_verdict', '')
+        comment = data.get('comment', '')
+        
+        # Если URL невалидный — очищаем model_verdict
+        if url:
+            try:
+                normalized = normalize_url(url)
+                if not is_valid_url(normalized):
+                    model_verdict = ""
+            except:
+                model_verdict = ""
+        
+        save_feedback(url, model_verdict, user_verdict, comment)
         return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
+        
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
