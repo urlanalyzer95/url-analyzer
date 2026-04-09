@@ -309,11 +309,18 @@
         }
 
         // Текст результата
+        // resultBox.innerHTML = `
+        //   <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+        //   // ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+        //   <div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score !== undefined ? data.score : 0}%</div>
+        // `;
+
         resultBox.innerHTML = `
           <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
-          // ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
-          <div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score !== undefined ? data.score : 0}%</div>
-        `;
+          <div style="font-size: 14px; margin-top: 5px;">
+          Уровень опасности: ${data.score === 0 ? '0%' : (data.score ? data.score + '%' : '—')}
+          </div>
+          `;
 
         // Объяснения
         if (data.explanations && data.explanations.length > 0) {
