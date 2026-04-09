@@ -28,6 +28,16 @@ safe_urls = [
     'https://microsoft.com',
     'https://reddit.com',
     'https://linkedin.com',
+    'https://whatsapp.com',
+    'https://telegram.org',
+    'https://zoom.us',
+    'https://netflix.com',
+    'https://spotify.com',
+    'https://twitch.tv',
+    'https://discord.com',
+    'https://stackexchange.com',
+    'https://medium.com',
+    'https://quora.com',
 ]
 
 # ОПАСНЫЕ URL (label=1) - ДОБАВЛЯЕМ
