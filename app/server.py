@@ -15,17 +15,13 @@ try:
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# Импорт извлечения признаков (после загрузки модели)
+# Импорт извлечения признаков
 from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
 cache = {}
 
-
-
-# Инициализация БД
-init_db()
-
+# ---------- Вспомогательные функции ----------
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -52,7 +48,30 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# Загрузка модели и датасета
+# ---------- Белый список только для главных страниц ----------
+TRUSTED_HOMEPAGES = [
+    'https://google.com',
+    'https://yandex.ru',
+    'https://ya.ru', 
+    'https://github.com',
+    'https://stackoverflow.com',
+    'https://wikipedia.org',
+    'https://youtube.com',
+    'https://instagram.com',
+    'https://facebook.com',
+    'https://twitter.com',
+    'https://amazon.com',
+    'https://apple.com',
+    'https://microsoft.com',
+    'https://reddit.com',
+    'https://linkedin.com'
+]
+
+def is_trusted_homepage(url):
+    normalized = normalize_url(url)
+    return normalized in TRUSTED_HOMEPAGES
+
+# ---------- Загрузка модели и датасета ----------
 model = None
 feature_columns = []
 features_df = None
@@ -72,6 +91,10 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
+# Инициализация БД
+init_db()
+
+# ---------- Функция предсказания ----------
 def predict(url):
     if model is None:
         return 0.5
@@ -141,6 +164,18 @@ def check_url():
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
+
+    # Проверка по белому списку главных страниц
+    if is_trusted_homepage(url):
+        result = {
+            'url': raw_url,
+            'verdict': 'safe',
+            'verdict_text': '🟢 БЕЗОПАСНО',
+            'score': 0,
+            'explanations': ['Главная страница доверенного сайта']
+        }
+        set_cached(url, result)
+        return jsonify(result)
 
     score = predict(url)
     if score > 0.9:
