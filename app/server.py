@@ -73,7 +73,7 @@ def is_valid_url(url):
 def get_cached(url):
     if url in cache:
         data, timestamp = cache[url]
-        if datetime.now() - timestamp < timedelta(hours=1):
+        if datetime.now() - timestamp < timedelta(hours=24):
             return data
         del cache[url]
     return None
