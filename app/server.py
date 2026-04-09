@@ -89,21 +89,6 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-#белые списки
-
-TRUSTED_DOMAINS = [
-    'google.com',
-    'github.com',
-    'stackoverflow.com',
-    'yandex.ru'
-]
-
-#def is_trusted(url):
-#    return any(domain in url for domain in TRUSTED_DOMAINS)
-
-def is_trusted(url):
-    domain = urlparse(url).netloc
-    return any(domain.endswith(d) for d in TRUSTED_DOMAINS)
 # ПРЕДСКАЗАНИЕ 
 from ml.features import extract_features
 
@@ -118,35 +103,6 @@ def predict(url):
     except Exception as e:
         print(f"ML ошибка: {e}", file=sys.stderr)
         return 0.5
-#def predict(url):
-#    url_lower = url.lower().rstrip('/')
-#    
-#    if model is not None and features_df is not None and feature_columns:
-#        try:
-            # Нормализуем URL в features_df, если ещё нет
-            #if 'url_norm' not in features_df.columns:
-            #    features_df['url_norm'] = features_df['url'].apply(lambda x: str(x).lower().rstrip('/') if pd.notna(x) else '')
-            
-            #row = features_df[features_df['url_norm'] == url_lower]
-            #if not row.empty:
-            #    X = row[feature_columns]
-                # Проверяем, что X не пустой и все колонки на месте
-            #    if not X.empty and len(X.columns) == len(feature_columns):
-            #        proba = model.predict_proba(X)
-            #        return float(proba[0][1])
-        #except Exception as e:
-        #    print(f"ML ошибка при поиске: {e}", file=sys.stderr)
-    
-    ## Если модель не может предсказать, используем эвристики
-    # Простая эвристика: проверка на подозрительные слова
-    #suspicious_words = ['login', 'verify', 'account', 'secure', 'update', 'confirm']
-    #score = 0.5
-    #if any(word in url_lower for word in suspicious_words):
-    #    score = 0.6
-    #if any(word in url_lower for word in ['bit.ly', 'tinyurl', 'goo.gl']):
-    #    score = 0.55
-    
-    #return score
 
 # ЭНДПОИНТЫ 
 @app.route('/')
@@ -178,19 +134,6 @@ def check_url():
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
-
-    
-    if is_trusted(url):
-        result = {
-            'url': raw_url,
-            'verdict': 'safe',
-            'verdict_text': '🟢 БЕЗОПАСНО',
-            'score': 0,
-            'explanations': ['Доверенный домен']
-        }
-        set_cached(url, result)
-        return jsonify(result)
-        
     
     score = predict(url)
     
