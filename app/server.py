@@ -21,22 +21,7 @@ from ml.features import extract_features
 app = Flask(__name__, template_folder='templates')
 cache = {}
 
-# Белый список доверенных доменов
-TRUSTED_DOMAINS = [
-    'google.com', 'yandex.ru', 'github.com', 'stackoverflow.com',
-    'vk.com', 'wikipedia.org', 'youtube.com', 'instagram.com',
-    'facebook.com', 'twitter.com', 'amazon.com', 'apple.com',
-    'microsoft.com', 'reddit.com', 'linkedin.com'
-]
 
-def is_trusted(url):
-    try:
-        domain = urlparse(url).netloc
-        if domain.startswith('www.'):
-            domain = domain[4:]
-        return any(domain == d or domain.endswith('.' + d) for d in TRUSTED_DOMAINS)
-    except:
-        return False
 
 # Инициализация БД
 init_db()
@@ -156,18 +141,6 @@ def check_url():
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
-
-    # Белый список
-    if is_trusted(url):
-        result = {
-            'url': raw_url,
-            'verdict': 'safe',
-            'verdict_text': '🟢 БЕЗОПАСНО',
-            'score': 0,
-            'explanations': ['Домен из списка доверенных']
-        }
-        set_cached(url, result)
-        return jsonify(result)
 
     score = predict(url)
     if score > 0.9:
