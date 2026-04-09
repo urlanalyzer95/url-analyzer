@@ -228,35 +228,6 @@ def feedback():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
-# @app.route('/admin/feedbacks')
-# def admin_feedbacks():
-#     try:
-#         df = get_all_feedbacks()
-        
-        # if df.empty:
-        #     return '<h1>📋 Отзывы</h1><p>Пока нет</p><a href="/">На главную</a>'
-        
-        # html = '<h1>📋 Отзывы</h1><a href="/">← На главную</a><br><br>'
-        # html += '<table border="1" cellpadding="5">'
-        # html += '<tr><th>ID</th><th>URL</th><th>Модель</th><th>Пользователь</th><th>Комментарий</th><th>Дата</th></tr>'
-        
-        # for _, row in df.iterrows():
-        #     mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
-        #     style = 'style="background-color:#ffebee;"' if mismatch else ''
-        #     html += f'<tr {style}>'
-        #     html += f'<td>{row["id"]}</td>'
-        #     html += f'<td style="max-width:400px; word-break:break-all;">{row["url"][:80]}</td>'
-        #     html += f'<td>{row["model_verdict"]}</td>'
-        #     html += f'<td style="font-weight:bold;">{row["user_verdict"]}</td>'
-        #     html += f'<td>{row["user_comment"][:50] if row["user_comment"] else "-"}</td>'
-        #     html += f'<td>{row["timestamp"][:16] if row["timestamp"] else "-"}</td>'
-        #     html += '</tr>'
-        # 
-    #     html += '</table><p><a href="/download-db">📥 Скачать БД с отзывами</a></p>'
-    #     return html
-    # except Exception as e:
-    #     return f'<h1>Ошибка</h1><p>{e}</p>'
-
 
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
@@ -282,44 +253,24 @@ def admin_feedbacks():
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
 
-
-
-# @app.route('/admin/download-db')
-# # @app.route('/download-db')
-# def download_db():
-#     db_path = get_db_path()
-    
-#     if os.path.exists(db_path):
-#         return send_file(db_path, as_attachment=True, download_name='feedback.db')
-    
-#     if os.path.exists('data/feedback.db'):
-#         return send_file('data/feedback.db', as_attachment=True, download_name='feedback.db')
-    
-#     return "❌ БД не найдена", 404
-
-
-
-@app.route('/admin/download-db')  # ✅ Добавлен маршрут под админку
-@app.route('/download-db')        # ✅ Оставлен старый маршрут для совместимости
+@app.route('/admin/download-db')
+@app.route('/download-db')
 def download_db():
     try:
-        # Формируем абсолютный путь относительно папки, где лежит server.py
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        db_path = os.path.join(base_dir, 'data', 'feedback.db')
-
-        if not os.path.exists(db_path):
-            return "❌ Файл feedback.db не найден в папке data/", 404
-
-        # send_file безопасно отдаёт файл
+        # Правильный путь: корень проекта / data / feedback.db
+        base_dir = Path(__file__).parent.parent  # поднимаемся из app/ в корень
+        db_path = base_dir / 'data' / 'feedback.db'
+        
+        if not db_path.exists():
+            return f"❌ Файл feedback.db не найден по пути: {db_path}", 404
+        
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
         
     except PermissionError:
-        return "❌ Нет прав на чтение файла БД. Проверьте права доступа к папке data/", 403
+        return "❌ Нет прав на чтение файла БД. Проверьте права доступа.", 403
     except Exception as e:
         print(f"[ERROR] Ошибка при скачивании БД: {e}", file=sys.stderr)
         return f"❌ Внутренняя ошибка сервера: {e}", 500
-
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
