@@ -17,14 +17,14 @@ def extract_features(url):
     features.append(1 if re.search(r'\d{1,3}(\.\d{1,3}){3}', url) else 0)  # has_ip
     features.append(1 if url.startswith('https') else 0)  # has_https
 
-    # СЛОВА
+    # СЛОВА (ровно как в датасете!)
     for word in ['login', 'verify', 'account', 'cp.php', 'admin']:
         features.append(1 if word in url else 0)
 
-    # Сокращатели
+    # СОКРАЩАТЕЛИ
     features.append(1 if any(s in url for s in ['bit.ly', 'goo.gl', 'tinyurl']) else 0)
 
-    # Домен
+    # ДОМЕН
     domain = urlparse(url).netloc
     features.append(len(domain))  # domain_length
 
