@@ -15,7 +15,7 @@ try:
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# Импорт извлечения признаков (после загрузки модели)
+# Импорт извлечения признаков
 from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
@@ -37,10 +37,22 @@ def is_valid_url(url):
     except:
         return False
 
-# Белый список только для главных страниц (без пути)
+def get_cached(url):
+    if url in cache:
+        data, timestamp = cache[url]
+        if datetime.now() - timestamp < timedelta(hours=24):
+            return data
+        del cache[url]
+    return None
+
+def set_cached(url, data):
+    cache[url] = (data, datetime.now())
+
+# ---------- Белый список только для главных страниц ----------
 TRUSTED_HOMEPAGES = [
     'https://google.com',
     'https://yandex.ru',
+    'https://ya.ru', 
     'https://github.com',
     'https://stackoverflow.com',
     'https://wikipedia.org',
@@ -58,17 +70,6 @@ TRUSTED_HOMEPAGES = [
 def is_trusted_homepage(url):
     normalized = normalize_url(url)
     return normalized in TRUSTED_HOMEPAGES
-
-def get_cached(url):
-    if url in cache:
-        data, timestamp = cache[url]
-        if datetime.now() - timestamp < timedelta(hours=24):
-            return data
-        del cache[url]
-    return None
-
-def set_cached(url, data):
-    cache[url] = (data, datetime.now())
 
 # ---------- Загрузка модели и датасета ----------
 model = None
