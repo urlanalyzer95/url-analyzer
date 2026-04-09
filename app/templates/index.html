@@ -85,8 +85,12 @@
             <textarea
               class="comment-input"
               id="commentInput"
-              placeholder="Комментарий (необязательно)"
+              placeholder="Комментарий (необязательно, максимум 150 символов)"
+              maxlength="150"
             ></textarea>
+            
+            <!-- Счетчик символов -->
+            <div class="char-counter" id="charCounter">0 / 150</div>
 
             <div class="feedback-buttons">
               <button class="btn-feedback" id="submitFeedback">
@@ -97,7 +101,7 @@
           </div>
         </div>
 
-        <!-- Блок для системных сообщений (внизу) -->
+        <!-- Блок для системных сообщений -->
         <div
           id="systemMessage"
           class="system-message"
@@ -179,6 +183,29 @@
       const submitFeedbackBtn = document.getElementById("submitFeedback");
       const cancelFeedbackBtn = document.getElementById("cancelFeedback");
       const systemMessage = document.getElementById("systemMessage");
+      const commentInput = document.getElementById("commentInput");
+      const charCounter = document.getElementById("charCounter");
+
+      // Функция для обновления счетчика символов
+      function updateCharCounter() {
+        const currentLength = commentInput.value.length;
+        const maxLength = 150;
+        charCounter.textContent = `${currentLength} / ${maxLength}`;
+        
+        // Изменяем цвет в зависимости от количества символов
+        charCounter.classList.remove('warning', 'danger');
+        if (currentLength > maxLength * 0.8) {
+          charCounter.classList.add('warning');
+        }
+        if (currentLength === maxLength) {
+          charCounter.classList.add('danger');
+        }
+      }
+
+      // Добавляем обработчик события input для обновления счетчика
+      if (commentInput) {
+        commentInput.addEventListener('input', updateCharCounter);
+      }
 
       // Функция для показа системного сообщения
       function showSystemMessage(message, isError = false) {
@@ -208,6 +235,7 @@
           .querySelectorAll('input[name="verdict"]')
           .forEach((r) => (r.checked = false));
         document.getElementById("commentInput").value = "";
+        updateCharCounter(); // Обновляем счетчик после очистки
       }
 
       // Функция для показа кнопки (при новом URL)
@@ -218,6 +246,7 @@
           .querySelectorAll('input[name="verdict"]')
           .forEach((r) => (r.checked = false));
         document.getElementById("commentInput").value = "";
+        updateCharCounter(); // Обновляем счетчик после очистки
       }
 
       // Проверка URL
@@ -226,6 +255,8 @@
 
         const url = urlInput.value.trim();
         if (!url) return;
+
+        currentUrl = url;
 
         // Скрываем системное сообщение при новом запросе
         systemMessage.style.display = "none";
@@ -325,6 +356,7 @@
       feedbackBtn.addEventListener("click", () => {
         feedbackBtn.style.display = "none";
         feedbackSection.style.display = "block";
+        updateCharCounter(); // Обновляем счетчик при показе формы
         feedbackSection.scrollIntoView({ behavior: "smooth" });
       });
 
@@ -338,7 +370,13 @@
         const selectedVerdict = document.querySelector(
           'input[name="verdict"]:checked',
         );
-        const comment = document.getElementById("commentInput").value.trim();
+        let comment = document.getElementById("commentInput").value.trim();
+        
+        // Ограничиваем комментарий 150 символами на всякий случай
+        if (comment.length > 150) {
+          comment = comment.substring(0, 150);
+          showSystemMessage("Комментарий был обрезан до 150 символов", true);
+        }
 
         if (!selectedVerdict) {
           showSystemMessage("Пожалуйста, выберите вашу оценку", true);
