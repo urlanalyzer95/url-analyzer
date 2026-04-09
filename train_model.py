@@ -78,6 +78,7 @@ test_urls = [
     'https://wikipedia.org',
     'https://vk.com',
     'https://yandex.ru',
+    'https://github.com',
 ]
 
 for url in test_urls:
