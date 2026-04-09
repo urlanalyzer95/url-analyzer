@@ -201,9 +201,9 @@ def check_url():
     # Дальше ML модель
     score = predict(url)
     
-    if score > 0.85:
+    if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score > 0.4:
+    elif score > 0.5:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
