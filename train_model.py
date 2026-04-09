@@ -64,7 +64,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Обучаем модель
 print("Обучение модели...")
 model = RandomForestClassifier(
-    n_estimores=200,  # увеличили
+    n_estimators=200,  # увеличили
     max_depth=15,     # увеличили
     random_state=42,
     n_jobs=-1
