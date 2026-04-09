@@ -257,17 +257,29 @@ def admin_feedbacks():
 @app.route('/download-db')
 def download_db():
     try:
-        # Правильный путь: корень проекта / data / feedback.db
-        base_dir = Path(__file__).parent.parent  # поднимаемся из app/ в корень
+        # server.py лежит в папке app/, поднимаемся на уровень выше в корень проекта
+        base_dir = Path(__file__).parent.parent  # это корень проекта C:\Users\semno\url-analyzer
         db_path = base_dir / 'data' / 'feedback.db'
         
+        print(f"[DEBUG] Ищем БД по пути: {db_path}", file=sys.stderr)
+        
         if not db_path.exists():
-            return f"❌ Файл feedback.db не найден по пути: {db_path}", 404
+            # Пробуем альтернативные пути
+            alt_paths = [
+                Path('data/feedback.db'),
+                Path('feedback.db'),
+            ]
+            for alt in alt_paths:
+                if alt.exists():
+                    db_path = alt
+                    break
+            else:
+                return f"❌ Файл feedback.db не найден. Искали в: {db_path}", 404
         
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
         
     except PermissionError:
-        return "❌ Нет прав на чтение файла БД. Проверьте права доступа.", 403
+        return "❌ Нет прав на чтение файла БД. Проверьте права доступа к папке data/", 403
     except Exception as e:
         print(f"[ERROR] Ошибка при скачивании БД: {e}", file=sys.stderr)
         return f"❌ Внутренняя ошибка сервера: {e}", 500
