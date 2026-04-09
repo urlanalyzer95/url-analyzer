@@ -121,12 +121,48 @@ from ml.features import extract_features
 
 def predict(url):
     if model is None:
-        return 0.5  # fallback если модель не загрузилась
+        return 0.5
     
     try:
+        # Нормализуем URL для поиска
+        url_lower = url.lower().rstrip('/')
+        
+        # 1. Сначала ищем URL в датасете
+        if features_df is not None and feature_columns:
+            # Нормализуем URL в датасете (если ещё нет)
+            if 'url_norm' not in features_df.columns:
+                features_df['url_norm'] = features_df['url'].apply(
+                    lambda x: str(x).lower().rstrip('/') if pd.notna(x) else ''
+                )
+            
+            # Ищем точное совпадение
+            row = features_df[features_df['url_norm'] == url_lower]
+            
+            if not row.empty:
+                # Нашли в датасете - используем предсказание модели
+                X = row[feature_columns]
+                proba = model.predict_proba(X)[0][1]
+                print(f"Найдено в датасете: {url_lower} -> {proba:.2f}", file=sys.stderr)
+                return float(proba)
+        
+        # 2. Эвристики для явно опасных URL
+        # Проверка на IP-адрес
+        if re.search(r'\d{1,3}(\.\d{1,3}){3}', url_lower):
+            print(f"Обнаружен IP-адрес: {url_lower}", file=sys.stderr)
+            return 0.95
+        
+        # Проверка на короткие ссылки
+        shorteners = ['bit.ly', 'tinyurl', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly']
+        if any(s in url_lower for s in shorteners):
+            print(f"Обнаружен сокращатель ссылок: {url_lower}", file=sys.stderr)
+            return 0.85
+        
+        # 3. Если не нашли - извлекаем признаки и предсказываем
         features = extract_features(url)
-        proba = model.predict_proba([features])[0][1]
+        features_df_input = pd.DataFrame([features], columns=feature_columns)
+        proba = model.predict_proba(features_df_input)[0][1]
         return float(proba)
+        
     except Exception as e:
         print(f"ML ошибка: {e}", file=sys.stderr)
         return 0.5
