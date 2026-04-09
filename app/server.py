@@ -21,11 +21,7 @@ from ml.features import extract_features
 app = Flask(__name__, template_folder='templates')
 cache = {}
 
-
-
-# Инициализация БД
-init_db()
-
+# ---------- Вспомогательные функции ----------
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -41,6 +37,28 @@ def is_valid_url(url):
     except:
         return False
 
+# Белый список только для главных страниц (без пути)
+TRUSTED_HOMEPAGES = [
+    'https://google.com',
+    'https://yandex.ru',
+    'https://github.com',
+    'https://stackoverflow.com',
+    'https://wikipedia.org',
+    'https://youtube.com',
+    'https://instagram.com',
+    'https://facebook.com',
+    'https://twitter.com',
+    'https://amazon.com',
+    'https://apple.com',
+    'https://microsoft.com',
+    'https://reddit.com',
+    'https://linkedin.com'
+]
+
+def is_trusted_homepage(url):
+    normalized = normalize_url(url)
+    return normalized in TRUSTED_HOMEPAGES
+
 def get_cached(url):
     if url in cache:
         data, timestamp = cache[url]
@@ -52,7 +70,7 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# Загрузка модели и датасета
+# ---------- Загрузка модели и датасета ----------
 model = None
 feature_columns = []
 features_df = None
@@ -72,6 +90,10 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
+# Инициализация БД
+init_db()
+
+# ---------- Функция предсказания ----------
 def predict(url):
     if model is None:
         return 0.5
@@ -141,6 +163,18 @@ def check_url():
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
+
+    # Проверка по белому списку главных страниц
+    if is_trusted_homepage(url):
+        result = {
+            'url': raw_url,
+            'verdict': 'safe',
+            'verdict_text': '🟢 БЕЗОПАСНО',
+            'score': 0,
+            'explanations': ['Главная страница доверенного сайта']
+        }
+        set_cached(url, result)
+        return jsonify(result)
 
     score = predict(url)
     if score > 0.9:
