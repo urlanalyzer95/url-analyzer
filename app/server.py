@@ -89,11 +89,10 @@ feature_columns = []
 features_df = None
 
 # Определяем базовую директорию
-# BASE_DIR = Path(__file__).parent.parent  # это корень проекта
-BASE_DIR = Path(__file__).parent 
+BASE_DIR = Path(__file__).parent.parent  # поднимаемся из app/ в корень проекта
 
 try:
-    # ПРАВИЛЬНЫЙ ПУТЬ - ТАКОЙ ЖЕ, КАК В train_model.py
+    # ПРАВИЛЬНЫЙ ПУТЬ
     model_path = BASE_DIR / 'ml' / 'model.pkl'
     
     if model_path.exists():
@@ -101,9 +100,8 @@ try:
         print(f"✅ Модель загружена из {model_path}", file=sys.stderr)
     else:
         print(f"⚠️ Модель не найдена: {model_path}", file=sys.stderr)
-        print(f"   Сначала запустите: python ml/train_model.py", file=sys.stderr)
     
-    # Датасет - тоже правильный путь
+    # Датасет
     dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
     
     if dataset_path.exists():
@@ -112,9 +110,6 @@ try:
         print(f"✅ Датасет загружен: {len(features_df)} записей", file=sys.stderr)
     else:
         print(f"⚠️ Датасет не найден: {dataset_path}", file=sys.stderr)
-        
-except Exception as e:
-    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
 # ПРЕДСКАЗАНИЕ 
 from ml.features import extract_features
