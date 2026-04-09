@@ -88,30 +88,24 @@ model = None
 feature_columns = []
 features_df = None
 
-# Определяем базовую директорию
-BASE_DIR = Path(__file__).parent.parent  # поднимаемся из app/ в корень проекта
+BASE_DIR = Path(__file__).parent.parent
 
 try:
-    # ПРАВИЛЬНЫЙ ПУТЬ
     model_path = BASE_DIR / 'ml' / 'model.pkl'
-    
     if model_path.exists():
         model = joblib.load(model_path)
         print(f"✅ Модель загружена из {model_path}", file=sys.stderr)
-    else:
-        print(f"⚠️ Модель не найдена: {model_path}", file=sys.stderr)
     
-    # Датасет
     dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
-    
     if dataset_path.exists():
         features_df = pd.read_csv(dataset_path)
         feature_columns = [c for c in features_df.columns if c not in ['url', 'label']]
         print(f"✅ Датасет загружен: {len(features_df)} записей", file=sys.stderr)
-    else:
-        print(f"⚠️ Датасет не найден: {dataset_path}", file=sys.stderr)
+        
+except Exception as e:
+    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-# ПРЕДСКАЗАНИЕ 
+# ИМПОРТ ДОЛЖЕН БЫТЬ ПОСЛЕ try-except
 from ml.features import extract_features
 
 def predict(url):
