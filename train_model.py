@@ -4,39 +4,48 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from ml.features import extract_features
+import numpy as np
 
 print("Загрузка данных...")
 df = pd.read_csv('data/processed/url_dataset_features.csv')
 print(f"Исходный датасет: {len(df)} записей")
 
-# Добавляем безопасные URL
+# Получаем колонки признаков
+feature_cols = [c for c in df.columns if c not in ['url', 'label']]
+
+# Добавляем безопасные URL с правильными признаками
 safe_urls = [
-    'https://google.com',
-    'https://yandex.ru',
-    'https://github.com',
-    'https://stackoverflow.com',
-    'https://vk.com',
-    'https://wikipedia.org',
-    'https://youtube.com',
-    'https://instagram.com',
-    'https://facebook.com',
-    'https://twitter.com',
-    'https://amazon.com',
-    'https://apple.com',
-    'https://microsoft.com',
-    'https://reddit.com',
-    'https://linkedin.com',
+    ('https://google.com', 0),
+    ('https://yandex.ru', 0),
+    ('https://github.com', 0),
+    ('https://stackoverflow.com', 0),
+    ('https://vk.com', 0),
+    ('https://wikipedia.org', 0),
+    ('https://youtube.com', 0),
+    ('https://instagram.com', 0),
+    ('https://facebook.com', 0),
+    ('https://twitter.com', 0),
+    ('https://amazon.com', 0),
+    ('https://apple.com', 0),
+    ('https://microsoft.com', 0),
+    ('https://reddit.com', 0),
+    ('https://linkedin.com', 0),
 ]
 
 print(f"Добавляем {len(safe_urls)} доверенных URL...")
-safe_features = [extract_features(url) for url in safe_urls]
 
-feature_cols = [c for c in df.columns if c not in ['url', 'label']]
+# Извлекаем признаки для каждого URL
+safe_features_list = []
+for url, label in safe_urls:
+    features = extract_features(url)
+    safe_features_list.append(features)
 
-safe_df = pd.DataFrame(safe_features, columns=feature_cols)
+# Создаём DataFrame
+safe_df = pd.DataFrame(safe_features_list, columns=feature_cols)
 safe_df['label'] = 0
-safe_df['url'] = safe_urls
+safe_df['url'] = [url for url, _ in safe_urls]
 
+# Объединяем с основным датасетом
 df = pd.concat([df, safe_df], ignore_index=True)
 print(f"После добавления: {len(df)} записей")
 
@@ -55,8 +64,8 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Обучаем модель
 print("Обучение модели...")
 model = RandomForestClassifier(
-    n_estimators=150,
-    max_depth=10,
+    n_estimores=200,  # увеличили
+    max_depth=15,     # увеличили
     random_state=42,
     n_jobs=-1
 )
@@ -83,7 +92,9 @@ test_urls = [
 
 for url in test_urls:
     features = extract_features(url)
-    proba = model.predict_proba([features])[0][1]
+    # Преобразуем в DataFrame с именами колонок
+    features_df = pd.DataFrame([features], columns=feature_cols)
+    proba = model.predict_proba(features_df)[0][1]
     if proba < 0.3:
         verdict = "Безопасно"
     elif proba > 0.7:
