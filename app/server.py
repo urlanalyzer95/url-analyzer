@@ -24,7 +24,34 @@ except ImportError:
 # app = Flask(__name__)
 app = Flask(__name__, template_folder='templates')
 cache = {}
+# БЕЛЫЙ СПИСОК ДОВЕРЕННЫХ ДОМЕНОВ
+TRUSTED_DOMAINS = [
+    'google.com',
+    'yandex.ru', 
+    'github.com',
+    'stackoverflow.com',
+    'vk.com',
+    'wikipedia.org',
+    'youtube.com',
+    'instagram.com',
+    'facebook.com',
+    'twitter.com',
+    'amazon.com',
+    'apple.com',
+    'microsoft.com',
+    'reddit.com',
+    'linkedin.com'
+]
 
+def is_trusted(url):
+    try:
+        domain = urlparse(url).netloc
+        # Убираем www. если есть
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return any(domain == d or domain.endswith('.' + d) for d in TRUSTED_DOMAINS)
+    except:
+        return False
 init_db()
 
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ 
@@ -130,11 +157,23 @@ def check_url():
     if not is_valid_url(url):
         return jsonify({'error': 'Невалидный URL'}), 400
 
-
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
     
+    # ✅ ПРОВЕРКА ПО БЕЛОМУ СПИСКУ
+    if is_trusted(url):
+        result = {
+            'url': raw_url,
+            'verdict': 'safe',
+            'verdict_text': '🟢 БЕЗОПАСНО',
+            'score': 0,
+            'explanations': ['Домен из списка доверенных']
+        }
+        set_cached(url, result)
+        return jsonify(result)
+    
+    # Дальше ML модель
     score = predict(url)
     
     if score > 0.8:
@@ -154,9 +193,7 @@ def check_url():
     
     set_cached(url, result)
     return jsonify(result)
-
-
-
+    
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
