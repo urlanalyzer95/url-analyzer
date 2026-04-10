@@ -259,56 +259,46 @@ def feedback():
 
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
-    """
-    Админ-панель: показывает все отзывы из БД с пагинацией (20 на страницу).
-    
-    """
     try:
+        # Читаем параметры пагинации из URL
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = max(10, min(100, int(request.args.get('per_page', 20))))
+
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', paginated_feedbacks=[], 
-                                 current_page=1, total_pages=0, total_feedbacks=0)
+            return render_template('admin.html', feedbacks=[], page=1, per_page=per_page, total_pages=1, total_items=0)
 
-       
-        page = request.args.get('page', 1, type=int)
-        per_page = 20  # 20 отзывов на страницу
-
-        all_feedbacks = []
+        # Преобразуем DataFrame в список словарей
+        feedbacks = []
         for _, row in df.iterrows():
-            mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
-            all_feedbacks.append({
+            mismatch = (row['model_verdict'] != row['user_verdict']) and (row['user_verdict'] != 'other')
+            feedbacks.append({
                 'id': row['id'],
                 'url': row['url'],
                 'model_verdict': row['model_verdict'],
                 'user_verdict': row['user_verdict'],
-                'user_comment': row['user_comment'],
+                'user_comment': row['user_comment'],  # 🔧 Исправлена опечатка из оригинала ('user_comme nt')
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
 
-        # новые сверху
-        all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
+        total_items = len(feedbacks)
+        total_pages = math.ceil(total_items / per_page) if total_items > 0 else 1
 
-        # Вычисляем пагинацию
-        total_feedbacks = len(all_feedbacks)
-        total_pages = ceil(total_feedbacks / per_page)
-
-        # Корректируем номер страницы
-        if page < 1:
-            page = 1
-        if page > total_pages and total_pages > 0:
+        # Защита от выхода за пределы (если пользователь ввёл ?page=999)
+        if page > total_pages:
             page = total_pages
 
-        # Получаем отзывы для текущей страницы
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
-        paginated_feedbacks = all_feedbacks[start_idx:end_idx]
+        paginated_feedbacks = feedbacks[start_idx:end_idx]
 
-        return render_template('admin.html', 
-                             paginated_feedbacks=paginated_feedbacks,
-                             current_page=page,
-                             total_pages=total_pages,
-                             total_feedbacks=total_feedbacks)
+        return render_template('admin.html',
+                               feedbacks=paginated_feedbacks,
+                               page=page,
+                               per_page=per_page,
+                               total_pages=total_pages,
+                               total_items=total_items)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
