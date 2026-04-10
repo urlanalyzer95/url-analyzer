@@ -261,18 +261,18 @@ def feedback():
 def admin_feedbacks():
     """
     Админ-панель: показывает все отзывы из БД с пагинацией (20 на страницу).
+    
     """
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[], 
+            return render_template('admin.html', paginated_feedbacks=[], 
                                  current_page=1, total_pages=0, total_feedbacks=0)
 
-      
-        page = request.args.get('page', 1, type=int)
-        per_page = 20       # 20 отзывов на страницу
-
        
+        page = request.args.get('page', 1, type=int)
+        per_page = 20  # 20 отзывов на страницу
+
         all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
@@ -286,7 +286,7 @@ def admin_feedbacks():
                 'mismatch': mismatch
             })
 
-        # новые сверху 
+        # новые сверху
         all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
 
         # Вычисляем пагинацию
