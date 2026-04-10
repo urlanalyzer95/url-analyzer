@@ -4,7 +4,6 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
-from math import ceil
 
 import pandas as pd
 import joblib
@@ -256,53 +255,32 @@ def feedback():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
-
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
+    """
+    Админ-панель: показывает все отзывы из БД.
+    Подсвечивает строки, где вердикт модели не совпадает с мнением пользователя.
+    """
     try:
-        # Читаем параметры пагинации из URL
-        page = max(1, int(request.args.get('page', 1)))
-        per_page = max(10, min(100, int(request.args.get('per_page', 20))))
-
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[], page=1, per_page=per_page, total_pages=1, total_items=0)
+            return render_template('admin.html', feedbacks=[])
 
-        # Преобразуем DataFrame в список словарей
         feedbacks = []
         for _, row in df.iterrows():
-            mismatch = (row['model_verdict'] != row['user_verdict']) and (row['user_verdict'] != 'other')
+            mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
             feedbacks.append({
                 'id': row['id'],
                 'url': row['url'],
                 'model_verdict': row['model_verdict'],
                 'user_verdict': row['user_verdict'],
-                'user_comment': row['user_comment'],  # 🔧 Исправлена опечатка из оригинала ('user_comme nt')
+                'user_comment': row['user_comment'],
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
-
-        total_items = len(feedbacks)
-        total_pages = math.ceil(total_items / per_page) if total_items > 0 else 1
-
-        # Защита от выхода за пределы (если пользователь ввёл ?page=999)
-        if page > total_pages:
-            page = total_pages
-
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated_feedbacks = feedbacks[start_idx:end_idx]
-
-        return render_template('admin.html',
-                               feedbacks=paginated_feedbacks,
-                               page=page,
-                               per_page=per_page,
-                               total_pages=total_pages,
-                               total_items=total_items)
+        return render_template('admin.html', feedbacks=feedbacks)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
-
-
 
 @app.route('/admin/download-db')
 @app.route('/download-db')
