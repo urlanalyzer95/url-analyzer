@@ -9,26 +9,33 @@ import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
 
-# Импорт модуля БД
+# ---- Подключение модуля работы с БД (feedback.db) ----
+# Пытаемся импортировать как обычный модуль, иначе как часть пакета app.
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# Импорт извлечения признаков
+# Функция извлечения признаков из URL (определена в ml/features.py)
 from ml.features import extract_features
 
+# Инициализация Flask-приложения и папки с шаблонами
 app = Flask(__name__, template_folder='templates')
+
+# Простой словарный кэш: ключ – нормализованный URL, значение – (результат, timestamp)
 cache = {}
 
 # ---------- Вспомогательные функции ----------
 def normalize_url(url):
+    """Приводит URL к стандартному виду: добавляет https:// если нужно,
+    переводит в нижний регистр, убирает завершающий слэш."""
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
     return url.lower().rstrip('/')
 
 def is_valid_url(url):
+    """Базовая проверка корректности URL: схема http/https, наличие точки в домене."""
     if not url.startswith(('http://', 'https://')) or ' ' in url:
         return False
     try:
@@ -38,6 +45,7 @@ def is_valid_url(url):
         return False
 
 def get_cached(url):
+    """Возвращает закэшированный результат проверки."""
     if url in cache:
         data, timestamp = cache[url]
         if datetime.now() - timestamp < timedelta(hours=24):
@@ -46,13 +54,15 @@ def get_cached(url):
     return None
 
 def set_cached(url, data):
+    """Сохраняет результат проверки в кэш с текущим временем."""
     cache[url] = (data, datetime.now())
 
-# ---------- Белый список только для главных страниц ----------
+# Список URL, которые считаются абсолютно безопасными (только главная страница, без пути).
+# Любые подстраницы этих доменов будут проверяться ML-моделью.
 TRUSTED_HOMEPAGES = [
     'https://google.com',
     'https://yandex.ru',
-    'https://ya.ru', 
+    'https://ya.ru',         
     'https://github.com',
     'https://stackoverflow.com',
     'https://wikipedia.org',
@@ -68,14 +78,16 @@ TRUSTED_HOMEPAGES = [
 ]
 
 def is_trusted_homepage(url):
+    """Проверяет, является ли URL главной страницей доверенного сайта."""
     normalized = normalize_url(url)
     return normalized in TRUSTED_HOMEPAGES
 
-# ---------- Загрузка модели и датасета ----------
+# ---------- Загрузка ML-модели и датасета ----------
 model = None
-feature_columns = []
-features_df = None
-BASE_DIR = Path(__file__).parent.parent
+feature_columns = []          # имена признаков, используемых моделью
+features_df = None            # DataFrame с признаками для поиска точных совпадений
+
+BASE_DIR = Path(__file__).parent.parent   # корень проекта (поднимаемся из app/)
 
 try:
     model_path = BASE_DIR / 'ml' / 'model.pkl'
@@ -91,18 +103,27 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-# Инициализация БД
+# Инициализация базы данных отзывов (создаётся таблица, если её нет)
 init_db()
 
-# ---------- Функция предсказания ----------
+# ---------- Основная функция предсказания ----------
 def predict(url):
+    """
+    Возвращает вероятность того, что URL является фишинговым (от 0.0 до 1.0).
+    Логика:
+      1. Поиск точного совпадения в датасете (если есть, берём предсказание модели).
+      2. Эвристики для IP-адресов и сервисов сокращения ссылок.
+      3. Иначе – извлечение признаков и предсказание ML-моделью.
+      4. Для URL с подозрительными словами ограничиваем вероятность 70%,
+         чтобы они не уходили в "опасно".
+    """
     if model is None:
-        return 0.5
+        return 0.5   # fallback, если модель не загружена
 
     try:
         url_lower = url.lower().rstrip('/')
 
-        # 1. Поиск в датасете
+        # ---- 1. Поиск в датасете (точное совпадение) ----
         if features_df is not None and feature_columns:
             if 'url_norm' not in features_df.columns:
                 features_df['url_norm'] = features_df['url'].apply(
@@ -114,20 +135,24 @@ def predict(url):
                 proba = model.predict_proba(X)[0][1]
                 return float(proba)
 
-        # 2. Эвристики
+        # ---- 2. Эвристики для явно опасных шаблонов ----
+        # IP-адрес вместо домена → почти всегда фишинг
         if re.search(r'\d{1,3}(\.\d{1,3}){3}', url_lower):
-            return 0.95                     # IP-адрес → опасность 95%
+            return 0.95
 
+        # Сервисы сокращения ссылок 
         shorteners = ['bit.ly', 'tinyurl', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly']
         if any(s in url_lower for s in shorteners):
-            return 0.70                     # Короткая ссылка → подозрительно 70%
+            return 0.70
 
-        # 3. ML модель
+        # ---- 3. ML-модель для новых/неизвестных URL ----
         features = extract_features(url)
         features_df_input = pd.DataFrame([features], columns=feature_columns)
         proba = model.predict_proba(features_df_input)[0][1]
 
-        # Ограничение для подозрительных слов (максимум 70%)
+        # ---- 4. Ограничение для подозрительных слов ----
+        # Если в URL есть слова login, verify, account и т.п., ограничиваем 70%,
+        # чтобы такие ссылки чаще были "подозрительными", а не "опасными".
         suspicious_words = ['login', 'verify', 'account', 'secure', 'update', 'confirm', 'signin']
         if any(word in url_lower for word in suspicious_words):
             proba = min(proba, 0.70)
@@ -137,13 +162,15 @@ def predict(url):
         print(f"ML ошибка: {e}", file=sys.stderr)
         return 0.5
 
-# ---------- Эндпоинты ----------
+# ---------- Эндпоинты (API) ----------
 @app.route('/')
 def index():
+    """Главная страница – форма для ввода URL."""
     return render_template('index.html')
 
 @app.route('/health')
 def health():
+    """Проверка работоспособности сервера и наличия модели."""
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
@@ -152,6 +179,11 @@ def health():
 
 @app.route('/check', methods=['POST'])
 def check_url():
+    """
+    Основной эндпоинт проверки URL.
+    Принимает JSON: {"url": "..."}
+    Возвращает вердикт, текст, процент опасности и объяснение.
+    """
     data = request.json
     raw_url = data.get('url', '').strip()
     if not raw_url:
@@ -161,11 +193,12 @@ def check_url():
     if not is_valid_url(url):
         return jsonify({'error': 'Невалидный URL'}), 400
 
+    # Проверяем кэш
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
 
-    # Проверка по белому списку главных страниц
+    # Белый список главных страниц – мгновенный ответ safe
     if is_trusted_homepage(url):
         result = {
             'url': raw_url,
@@ -177,6 +210,7 @@ def check_url():
         set_cached(url, result)
         return jsonify(result)
 
+    # Вычисляем вероятность опасности
     score = predict(url)
     if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
@@ -197,6 +231,10 @@ def check_url():
 
 @app.route('/feedback', methods=['POST'])
 def feedback():
+    """
+    Сохраняет отзыв пользователя о правильности проверки.
+    Если URL невалидный – поле model_verdict очищается.
+    """
     try:
         data = request.json
         url = data.get('url', '').strip()
@@ -208,7 +246,7 @@ def feedback():
             try:
                 normalized = normalize_url(url)
                 if not is_valid_url(normalized):
-                    model_verdict = ""
+                    model_verdict = ""   # невалидный URL – нет вердикта модели
             except:
                 model_verdict = ""
 
@@ -219,6 +257,10 @@ def feedback():
 
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
+    """
+    Админ-панель: показывает все отзывы из БД.
+    Подсвечивает строки, где вердикт модели не совпадает с мнением пользователя.
+    """
     try:
         df = get_all_feedbacks()
         if df.empty:
@@ -243,6 +285,7 @@ def admin_feedbacks():
 @app.route('/admin/download-db')
 @app.route('/download-db')
 def download_db():
+    """Скачивание файла базы данных feedback.db."""
     try:
         base_dir = Path(__file__).parent.parent
         db_path = base_dir / 'data' / 'feedback.db'
