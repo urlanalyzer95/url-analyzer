@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
+import math
 
 import pandas as pd
 import joblib
@@ -255,21 +256,53 @@ def feedback():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
+# @app.route('/admin/feedbacks')
+# def admin_feedbacks():
+#     """
+#     Админ-панель: показывает все отзывы из БД.
+#     Подсвечивает строки, где вердикт модели не совпадает с мнением пользователя.
+#     """
+#     try:
+#         df = get_all_feedbacks()
+#         if df.empty:
+#             return render_template('admin.html', feedbacks=[])
+
+#         feedbacks = []
+#         for _, row in df.iterrows():
+#             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
+#             feedbacks.append({
+#                 'id': row['id'],
+#                 'url': row['url'],
+#                 'model_verdict': row['model_verdict'],
+#                 'user_verdict': row['user_verdict'],
+#                 'user_comment': row['user_comment'],
+#                 'timestamp': row['timestamp'],
+#                 'mismatch': mismatch
+#             })
+#         return render_template('admin.html', feedbacks=feedbacks)
+#     except Exception as e:
+#         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
+
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
     """
-    Админ-панель: показывает все отзывы из БД.
-    Подсвечивает строки, где вердикт модели не совпадает с мнением пользователя.
+    Админ-панель: показывает все отзывы из БД с пагинацией (20 на страницу).
     """
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[])
+            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[], 
+                                 current_page=1, total_pages=0, total_feedbacks=0)
 
-        feedbacks = []
+        # Получаем номер страницы из GET-параметра (по умолчанию 1)
+        page = request.args.get('page', 1, type=int)
+        per_page = 20  # 20 отзывов на страницу
+
+        # Преобразуем DataFrame в список словарей
+        all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
-            feedbacks.append({
+            all_feedbacks.append({
                 'id': row['id'],
                 'url': row['url'],
                 'model_verdict': row['model_verdict'],
@@ -278,9 +311,34 @@ def admin_feedbacks():
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
-        return render_template('admin.html', feedbacks=feedbacks)
+
+        # Сортируем по ID (новые сверху) или по timestamp
+        all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
+
+        # Вычисляем пагинацию
+        total_feedbacks = len(all_feedbacks)
+        total_pages = ceil(total_feedbacks / per_page)
+
+        # Корректируем номер страницы
+        if page < 1:
+            page = 1
+        if page > total_pages and total_pages > 0:
+            page = total_pages
+
+        # Получаем отзывы для текущей страницы
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_feedbacks = all_feedbacks[start_idx:end_idx]
+
+        return render_template('admin.html', 
+                             paginated_feedbacks=paginated_feedbacks,
+                             current_page=page,
+                             total_pages=total_pages,
+                             total_feedbacks=total_feedbacks)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
+
+
 
 @app.route('/admin/download-db')
 @app.route('/download-db')
