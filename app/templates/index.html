@@ -1,180 +1,433 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отзывы пользователей</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            padding: 20px;
-            background-color: #f9fafb;
-            color: #111827;
-        }
-        h2 { margin-bottom: 16px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка URL ссылки</title>
+    <link rel="icon" type="image/svg+xml" href="/static/faviconka.svg" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="card">
+        <h1>Проверка ссылки</h1>
+        <p class="description">
+          Введите URL адрес сайта для проверки на фишинг.
+        </p>
+
+        <form class="url-form" id="urlForm">
+          <div class="input-group">
+            <input
+              type="text"
+              id="urlInput"
+              placeholder="https://example.com"
+              required
+            />
+          </div>
+          <button type="submit" class="btn-check" id="checkBtn">
+            Проверить
+          </button>
+        </form>
+
+        <!-- Индикатор загрузки -->
+        <div class="loader-container" id="loader">
+          <div class="loader"></div>
+          <span class="loader-text">Анализируем ссылку...</span>
+        </div>
+
+        <!-- Результаты проверки -->
+        <div id="resultContainer" style="display: none">
+          <div class="result-box" id="resultBox"></div>
+
+          <!-- Объяснения -->
+          <div class="explanations" id="explanations"></div>
+
+          <!-- Кнопка обратной связи -->
+          <button class="btn-report-error" id="feedbackBtn">
+            Сообщить об ошибке
+          </button>
+
+          <!-- Форма обратной связи -->
+          <div
+            class="feedback-section"
+            id="feedbackSection"
+            style="display: none"
+          >
+            <h3>Ваша оценка</h3>
+            <div class="radio-group">
+              <input
+                type="radio"
+                id="danger"
+                name="verdict"
+                value="dangerous"
+              />
+              <label for="danger" class="radio-label label-danger"
+                >Опасно</label
+              >
+
+              <input
+                type="radio"
+                id="suspicious"
+                name="verdict"
+                value="suspicious"
+              />
+              <label for="suspicious" class="radio-label label-suspicious"
+                >Подозрительно</label
+              >
+
+              <input type="radio" id="safe" name="verdict" value="safe" />
+              <label for="safe" class="radio-label label-safe">Безопасно</label>
+
+              <input type="radio" id="other" name="verdict" value="other" />
+              <label for="other" class="radio-label label-other">Другое</label>
+            </div>
+
+            <textarea
+              class="comment-input"
+              id="commentInput"
+              placeholder="Комментарий (необязательно, максимум 150 символов)"
+              maxlength="150"
+            ></textarea>
+            
+            <!-- Счетчик символов -->
+            <div class="char-counter" id="charCounter">0 / 150</div>
+
+            <div class="feedback-buttons">
+              <button class="btn-feedback" id="submitFeedback">
+                Отправить отзыв
+              </button>
+              <button class="btn-cancel" id="cancelFeedback">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Блок для системных сообщений -->
+        <div
+          id="systemMessage"
+          class="system-message"
+          style="display: none"
+        ></div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <div class="footer-logo">
+          <img src="/static/faviconka.svg" alt="Logo" class="footer-icon" />
+          <span class="footer-brand">URL Analyzer</span>
+        </div>
+
+        <div class="footer-section">
+          <h4>Модель</h4>
+          <p>
+            <span style="white-space: nowrap; margin-right: 20px"
+              >Random Forest</span
+            >
+            <span style="white-space: nowrap"
+              >Точность: <span class="model-accuracy">94%</span></span
+            >
+          </p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Проект</h4>
+          <p>Анализатор подозрительности URL</p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Ссылки</h4>
+          <p>
+            <a
+              href="https://github.com/urlanalyzer95/url-analyzer"
+              class="footer-link"
+              style="white-space: nowrap; margin-right: 20px"
+              >GitHub</a
+            >
+            <a class="footer-link" style="white-space: nowrap"
+              >urlanalyzer95@gmail.com</a
+            >
+          </p>
+        </div>
+
+        <div class="footer-section">
+          <h4>Статус</h4>
+          <p>
+            <span style="white-space: nowrap; margin-right: 20px">
+              <span class="status-dot"></span> Онлайн
+            </span>
+            <span style="white-space: nowrap">Версия 2.0</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2026 Команда разработчиков. Все права защищены.</p>
+      </div>
+    </footer>
+
+    <script>
+      // Глобальная переменная для хранения текущего URL и вердикта модели
+      let currentUrl = "";
+      let currentModelVerdict = "";
+
+      // Элементы DOM
+      const urlForm = document.getElementById("urlForm");
+      const urlInput = document.getElementById("urlInput");
+      const checkBtn = document.getElementById("checkBtn");
+      const loader = document.getElementById("loader");
+      const resultContainer = document.getElementById("resultContainer");
+      const resultBox = document.getElementById("resultBox");
+      const explanationsDiv = document.getElementById("explanations");
+      const feedbackBtn = document.getElementById("feedbackBtn");
+      const feedbackSection = document.getElementById("feedbackSection");
+      const submitFeedbackBtn = document.getElementById("submitFeedback");
+      const cancelFeedbackBtn = document.getElementById("cancelFeedback");
+      const systemMessage = document.getElementById("systemMessage");
+      const commentInput = document.getElementById("commentInput");
+      const charCounter = document.getElementById("charCounter");
+
+      // Функция для обновления счетчика символов
+      function updateCharCounter() {
+        const currentLength = commentInput.value.length;
+        const maxLength = 150;
+        charCounter.textContent = `${currentLength} / ${maxLength}`;
         
-        /* Стили для кнопок */
-        .btn {
-            display: inline-block;
-            padding: 10px 18px;
-            margin: 0 10px 16px 0;
-            background-color: #2563eb;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-            transition: background 0.2s;
+        // Изменяем цвет в зависимости от количества символов
+        charCounter.classList.remove('warning', 'danger');
+        if (currentLength > maxLength * 0.8) {
+          charCounter.classList.add('warning');
         }
-        .btn:hover { background-color: #1d4ed8; }
-        .btn-secondary { background-color: #4b5563; }
-        .btn-secondary:hover { background-color: #374151; }
+        if (currentLength === maxLength) {
+          charCounter.classList.add('danger');
+        }
+      }
 
-        /* Стили таблицы */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e5e7eb;
-            vertical-align: top;
-        }
-        th { background-color: #f3f4f6; font-weight: 600; }
-        tr:last-child td { border-bottom: none; }
+      // Добавляем обработчик события input для обновления счетчика
+      if (commentInput) {
+        commentInput.addEventListener('input', updateCharCounter);
+      }
 
-        /* Полное отображение длинных комментариев */
-        .comment-cell {
-            white-space: pre-wrap;      /* Сохраняет переносы строк */
-            word-wrap: break-word;      /* Переносит длинные слова */
-            max-width: 400px;           /* Ограничивает ширину, чтобы таблица не разъезжалась */
+      // Функция для показа системного сообщения
+      function showSystemMessage(message, isError = false) {
+        systemMessage.textContent = message;
+        systemMessage.className = "system-message";
+        if (isError) {
+          systemMessage.classList.add("system-message-error");
+        } else {
+          systemMessage.classList.add("system-message-success");
         }
-        .url-cell a {
-            color: #2563eb;
-            text-decoration: none;
-        }
-        .url-cell a:hover { text-decoration: underline; }
-        .empty-msg { padding: 20px; color: #6b7280; font-style: italic; }
+        systemMessage.style.display = "block";
 
-        /* Стили пагинации */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 24px;
-            flex-wrap: wrap;
-        }
-        .page-link {
-            display: inline-block;
-            padding: 8px 14px;
-            background-color: #fff;
-            color: #2563eb;
-            text-decoration: none;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-            transition: all 0.2s;
-            font-weight: 500;
-        }
-        .page-link:hover {
-            background-color: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-        }
-        .page-link.active {
-            background-color: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-            cursor: default;
-        }
-        .page-link.disabled {
-            color: #9ca3af;
-            pointer-events: none;
-            background-color: #f9fafb;
-        }
-        .page-info {
-            text-align: center;
-            margin-top: 16px;
-            color: #6b7280;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <h2>Отзывы пользователей</h2>
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+          if (systemMessage.style.display === "block") {
+            systemMessage.style.display = "none";
+          }
+        }, 30000);
+      }
 
-    <div class="actions">
-        <a href="/" class="btn">← На главную</a>
-        <a href="/admin/download-db" class="btn btn-secondary">📥 Скачать БД</a>
-    </div>
+      // Функция для ПОЛНОГО скрытия кнопки (после отправки отзыва)
+      function hideButtonCompletely() {
+        feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "none";
+        // Очищаем форму
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+        updateCharCounter(); // Обновляем счетчик после очистки
+      }
 
-    {% if paginated_feedbacks %}
-    <table>
-        <thead>
-            <tr>
-                <th width="5%">ID</th>
-                <th width="20%">URL</th>
-                <th width="15%">Вердикт модели</th>
-                <th width="15%">Вердикт пользователя</th>
-                <th width="30%">Комментарий</th>
-                <th width="15%">Дата</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for fb in paginated_feedbacks %}
-            <tr>
-                <td>{{ fb.id }}</td>
-                <td class="url-cell">
-                    <a href="{{ fb.url }}" target="_blank" title="{{ fb.url }}">
-                        {{ fb.url[:80] }}{% if fb.url|length > 80 %}...{% endif %}
-                    </a>
-                </td>
-                <td>{{ fb.model_verdict }}</td>
-                <td>{{ fb.user_verdict }}</td>
-                <td class="comment-cell">{{ fb.user_comment or "-" }}</td>
-                <td>{{ fb.timestamp[:16] if fb.timestamp else "-" }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+      // Функция для показа кнопки (при новом URL)
+      function showButton() {
+        feedbackBtn.style.display = "block";
+        feedbackSection.style.display = "none";
+        document
+          .querySelectorAll('input[name="verdict"]')
+          .forEach((r) => (r.checked = false));
+        document.getElementById("commentInput").value = "";
+        updateCharCounter(); // Обновляем счетчик после очистки
+      }
 
-    <!-- Пагинация -->
-    {% if total_pages > 1 %}
-    <div class="pagination">
-        {% if current_page > 1 %}
-            <a href="?page={{ current_page - 1 }}" class="page-link">← Предыдущая</a>
-        {% else %}
-            <span class="page-link disabled">← Предыдущая</span>
-        {% endif %}
+      // Проверка URL
+      urlForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
 
-        {% for p in range(1, total_pages + 1) %}
-            {% if p == current_page %}
-                <span class="page-link active">{{ p }}</span>
-            {% elif p <= 3 or p > total_pages - 3 or (p >= current_page - 2 and p <= current_page + 2) %}
-                <a href="?page={{ p }}" class="page-link">{{ p }}</a>
-            {% elif p == 4 and current_page > 4 %}
-                <span class="page-link disabled">...</span>
-            {% elif p == total_pages - 3 and current_page < total_pages - 3 %}
-                <span class="page-link disabled">...</span>
-            {% endif %}
-        {% endfor %}
+        const url = urlInput.value.trim();
+        if (!url) return;
 
-        {% if current_page < total_pages %}
-            <a href="?page={{ current_page + 1 }}" class="page-link">Следующая →</a>
-        {% else %}
-            <span class="page-link disabled">Следующая →</span>
-        {% endif %}
-    </div>
-    <div class="page-info">
-        Страница {{ current_page }} из {{ total_pages }} · Всего отзывов: {{ total_feedbacks }}
-    </div>
-    {% endif %}
+        currentUrl = url;
 
-    {% else %}
-    <p class="empty-msg">Пока нет отзывов</p>
-    {% endif %}
-</body>
+        // Скрываем системное сообщение при новом запросе
+        systemMessage.style.display = "none";
+
+        // ПРИ НОВОМ URL - ПОКАЗЫВАЕМ КНОПКУ
+        showButton();
+
+        // Показываем загрузку
+        setLoading(true);
+        resultContainer.style.display = "none";
+
+        try {
+          const response = await fetch("/check", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ url: url }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            displayResult(data);
+            currentUrl = data.url;
+            currentModelVerdict = data.verdict;
+          } else {
+            showError(data.error || "Ошибка проверки URL");
+          }
+        } catch (error) {
+          showError("Ошибка соединения с сервером");
+          console.error(error);
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      // Отображение результатов
+      function displayResult(data) {
+        // Устанавливаем класс для цвета
+        resultBox.className = "result-box";
+        if (data.verdict === "dangerous") {
+          resultBox.classList.add("dangerous");
+        } else if (data.verdict === "suspicious") {
+          resultBox.classList.add("suspicious");
+        } else if (data.verdict === "safe") {
+          resultBox.classList.add("safe");
+        } else {
+          resultBox.classList.add("error");
+        }
+
+        // Текст результата
+        // resultBox.innerHTML = `
+        //   <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+        //   // ${data.score ? `<div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score}%</div>` : ""}
+        //   <div style="font-size: 14px; margin-top: 5px;">Уровень опасности: ${data.score !== undefined ? data.score : 0}%</div>
+        // `;
+
+        resultBox.innerHTML = `
+          <div style="font-size: 20px; margin-bottom: 10px;">${data.verdict_text}</div>
+          <div style="font-size: 14px; margin-top: 5px;">
+          Уровень опасности: ${data.score === 0 ? '0%' : (data.score ? data.score + '%' : '—')}
+          </div>
+          `;
+
+        // Объяснения
+        if (data.explanations && data.explanations.length > 0) {
+          explanationsDiv.innerHTML = `
+            <div class="expl-list">
+              <strong>Обнаружено:</strong>
+              <ul>
+                ${data.explanations.map((exp) => `<li>${exp}</li>`).join("")}
+              </ul>
+            </div>
+          `;
+        } else {
+          explanationsDiv.innerHTML = "";
+        }
+
+        resultContainer.style.display = "block";
+      }
+
+      // Показ ошибки
+      function showError(message) {
+        resultBox.className = "result-box error";
+        resultBox.innerHTML = `<div>❌ ${message}</div>`;
+        explanationsDiv.innerHTML = "";
+        resultContainer.style.display = "block";
+      }
+
+      // Показ/скрытие загрузки
+      function setLoading(loading) {
+        loader.style.display = loading ? "flex" : "none";
+        checkBtn.disabled = loading;
+        if (loading) {
+          checkBtn.classList.add("disabled");
+          checkBtn.textContent = "Проверка...";
+        } else {
+          checkBtn.classList.remove("disabled");
+          checkBtn.textContent = "Проверить";
+        }
+      }
+
+      // Нажатие на кнопку "Сообщить об ошибке" - скрываем кнопку, показываем форму
+      feedbackBtn.addEventListener("click", () => {
+        feedbackBtn.style.display = "none";
+        feedbackSection.style.display = "block";
+        updateCharCounter(); // Обновляем счетчик при показе формы
+        feedbackSection.scrollIntoView({ behavior: "smooth" });
+      });
+
+      // Отмена формы обратной связи - показываем кнопку, скрываем форму
+      cancelFeedbackBtn.addEventListener("click", () => {
+        showButton();
+      });
+
+      // Отправка обратной связи
+      submitFeedbackBtn.addEventListener("click", async () => {
+        const selectedVerdict = document.querySelector(
+          'input[name="verdict"]:checked',
+        );
+        let comment = document.getElementById("commentInput").value.trim();
+        
+        // Ограничиваем комментарий 150 символами на всякий случай
+        if (comment.length > 150) {
+          comment = comment.substring(0, 150);
+          showSystemMessage("Комментарий был обрезан до 150 символов", true);
+        }
+
+        if (!selectedVerdict) {
+          showSystemMessage("Пожалуйста, выберите вашу оценку", true);
+          return;
+        }
+
+        const feedbackData = {
+          url: currentUrl,
+          model_verdict: currentModelVerdict,
+          user_verdict: selectedVerdict.value,
+          comment: comment,
+        };
+
+        try {
+          submitFeedbackBtn.disabled = true;
+          submitFeedbackBtn.textContent = "Отправка...";
+
+          const response = await fetch("/feedback", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(feedbackData),
+          });
+
+          if (response.ok) {
+            // ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ УСПЕХЕ
+            showSystemMessage("✅ Спасибо за отзыв!", false);
+            // КНОПКА ПОЛНОСТЬЮ СКРЫВАЕТСЯ
+            hideButtonCompletely();
+          } else {
+            showSystemMessage("❌ Ошибка при отправке отзыва", true);
+            showButton();
+          }
+        } catch (error) {
+          console.error(error);
+          showSystemMessage("❌ Ошибка соединения с сервером", true);
+          showButton();
+        } finally {
+          submitFeedbackBtn.disabled = false;
+          submitFeedbackBtn.textContent = "Отправить отзыв";
+        }
+      });
+    </script>
+  </body>
 </html>
