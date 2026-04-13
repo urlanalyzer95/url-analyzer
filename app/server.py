@@ -6,20 +6,17 @@ from urllib.parse import urlparse
 from pathlib import Path
 import math
 
-# Делаем видимой папку ml (для импорта features)
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
 
-# Импорт модуля БД
+# ---- Подключение модуля работы с БД (feedback.db) ----
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# Импорт извлечения признаков
+# Функция извлечения признаков из URL (определена в ml/features.py)
 from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
@@ -73,11 +70,13 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-# Инициализация БД
 init_db()
 
-# ---------- Функция предсказания (только ML, без эвристик и белых списков) ----------
+# ---------- Функция предсказания (только ML, без эвристик) ----------
 def predict(url):
+    """
+    Возвращает вероятность фишинга (0.0..1.0) на основе ML-модели.
+    """
     if model is None:
         return 0.5
 
@@ -115,7 +114,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v2.0_no_heuristics_no_whitelist'
+        'model_version': 'v2.0_no_heuristics'
     })
 
 @app.route('/check', methods=['POST'])
@@ -180,7 +179,7 @@ def admin_feedbacks():
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[],
+            return render_template('admin.html', paginated_feedbacks=[],
                                  current_page=1, total_pages=0, total_feedbacks=0)
 
         page = request.args.get('page', 1, type=int)
@@ -206,7 +205,7 @@ def admin_feedbacks():
 
         if page < 1:
             page = 1
-        if page > total_pages and total_pages > 0:
+        if page > total_pages:
             page = total_pages
 
         start_idx = (page - 1) * per_page
