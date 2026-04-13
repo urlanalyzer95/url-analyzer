@@ -217,7 +217,7 @@ def admin_feedbacks():
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
-@app.route('/download-db')
+@app.route('/download/db')
 def download_db():
     try:
         base_dir = Path(__file__).parent.parent
