@@ -20,6 +20,6 @@
     "legitimate": 0,
     "phishing": 1
   },
-  "total_samples": 208870,
-  "generated_at": "2026-04-02T10:27:21.796974"
+  "total_samples": 208868,
+  "generated_at": "2026-04-13T18:36:49.554091"
 }

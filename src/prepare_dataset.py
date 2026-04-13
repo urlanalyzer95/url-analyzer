@@ -1,126 +1,200 @@
 import pandas as pd
-import numpy as np
+import sqlite3
+import re
 from pathlib import Path
-import sys
-
-# Добавляем путь к ml папке
-sys.path.append(str(Path(__file__).parent.parent / 'ml'))
-from features import extract_features
+from urllib.parse import urlparse
 
 # Пути
-DATA_DIR = Path('data/processed')
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-OLD_DATASET = 'data/processed/url_dataset_features.csv'
-NEW_EXAMPLES = 'data/new_training_examples.csv'
-OUTPUT_DATASET = 'data/processed/url_dataset_features_v2.csv'
+DB_PATH = 'data/feedback.db'
+DATASET_FILE = 'data/processed/url_dataset_features.csv'
 
 
-def load_main_dataset():
-    # Загрузка основного датасета
-    if Path(OLD_DATASET).exists():
-        df = pd.read_csv(OLD_DATASET)
-        print(f"📁 Основной датасет: {len(df)} записей")
-        return df
-    else:
-        print(f"⚠️ Основной датасет не найден: {OLD_DATASET}")
+def clean_feedback(df):
+    """Очистка отзывов (копия логики из clean_data.py)"""
+    # 1. Удалить дубликаты по URL
+    df = df.drop_duplicates(subset=['url'])
+    
+    # 2. Удалить строки с пустыми значениями
+    df = df.dropna()
+    
+    # 3. Очистка URL
+    df['url'] = df['url'].astype(str).str.strip().str.lower()
+    df = df[df['url'] != '']
+    df = df[df['url'] != 'nan']
+    
+    # 4. Валидация URL
+    def is_valid_url(url):
+        try:
+            parsed = urlparse(url)
+            return bool(parsed.scheme and parsed.netloc)
+        except:
+            return False
+    
+    df = df[df['url'].apply(is_valid_url)]
+    
+    return df
+
+
+def extract_features(df):
+    """Извлечение признаков (копия логики из clean_data.py)"""
+    features = pd.DataFrame(index=df.index)
+    
+    # Базовые признаки
+    features['url_length'] = df['url'].str.len()
+    features['num_dots'] = df['url'].str.count(r'\.')
+    features['num_hyphens'] = df['url'].str.count(r'-')
+    features['num_slashes'] = df['url'].str.count(r'/')
+    features['num_params'] = df['url'].str.count(r'[?&]')
+    
+    # Безопасность
+    features['has_ip'] = df['url'].str.contains(
+        r'\d{1,3}(?:\.\d{1,3}){3}', regex=True, na=False
+    ).astype(int)
+    features['has_https'] = df['url'].str.startswith('https', na=False).astype(int)
+    
+    # Подозрительные слова
+    for word in ['login', 'verify', 'account', 'cp.php', 'admin']:
+        features[f'has_{word}'] = df['url'].str.contains(
+            word, case=False, na=False
+        ).astype(int)
+    
+    # Сокращатели
+    features['is_shortened'] = df['url'].str.contains(
+        'bit.ly|goo.gl|tinyurl', case=False, na=False
+    ).astype(int)
+    
+    # Структура
+    features['domain_length'] = df['url'].apply(
+        lambda x: len(urlparse(str(x)).netloc)
+    )
+    
+    # Целевая переменная и URL
+    features['label'] = df['label']
+    features['url'] = df['url']
+    
+    return features
+
+
+def load_feedback_from_db():
+    """Загружает ВСЕ отзывы из БД"""
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query('''
+        SELECT DISTINCT url, user_verdict
+        FROM feedbacks
+        WHERE user_verdict IN ('dangerous', 'safe')
+    ''', conn)
+    conn.close()
+    
+    if df.empty:
         return pd.DataFrame()
-
-
-def load_new_examples():
-    # Загрузка новых примеров из отзывов
-    if Path(NEW_EXAMPLES).exists():
-        df = pd.read_csv(NEW_EXAMPLES)
-        df = df[['url', 'label']]
-        print(f"📁 Новые примеры из отзывов: {len(df)} записей")
-        return df
-    else:
-        print("⚠️ Нет новых примеров из отзывов")
-        return pd.DataFrame(columns=['url', 'label'])
-
-
-def extract_features_for_urls(df, feature_cols):
-    # Извлечение признаков для новых URL
-    print("\n⚙️ Извлечение признаков для новых URL...")
     
-    new_features = []
-    new_labels = []
+    # Конвертируем метки
+    df['label'] = df['user_verdict'].map({'dangerous': 1, 'safe': 0})
+    df = df.dropna(subset=['label'])
+    df['label'] = df['label'].astype(int)
     
-    for idx, row in df.iterrows():
-        url = row['url']
-        label = row['label']
-        
-        features = extract_features(url)
-        new_features.append(features)
-        new_labels.append(label)
+    print(f"📁 Загружено отзывов из БД: {len(df)}")
+    print(f"   Опасных (1): {(df['label'] == 1).sum()}")
+    print(f"   Безопасных (0): {(df['label'] == 0).sum()}")
     
-    # Создаём DataFrame с признаками
-    feedback_features_df = pd.DataFrame(new_features, columns=feature_cols)
-    feedback_features_df['url'] = df['url'].values
-    feedback_features_df['label'] = df['label'].values
-    
-    print(f"   ✅ Извлечено признаков: {feedback_features_df.shape}")
-    return feedback_features_df
+    return df[['url', 'label']]
 
 
-def prepare_dataset():
-    """Основная функция подготовки датасета"""
+def clear_database():
+    """Полностью очищает БД"""
+    print("\n🧹 ОЧИСТКА БАЗЫ ДАННЫХ")
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM feedbacks')
+    before = cursor.fetchone()[0]
+    
+    cursor.execute('DELETE FROM feedbacks')
+    cursor.execute('DELETE FROM sqlite_sequence WHERE name="feedbacks"')
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"   ✅ Удалено записей: {before}")
+    
+    if before > 0:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('VACUUM')
+        conn.close()
+        print(f"   ✅ БД оптимизирована")
+
+
+def update_dataset():
+    """Добавляет отзывы в датасет"""
     print("\n" + "="*50)
-    print("🔄 ПОДГОТОВКА НОВОГО ДАТАСЕТА")
+    print("🔄 ДОБАВЛЕНИЕ ОТЗЫВОВ В ДАТАСЕТ")
     print("="*50)
     
-    # 1. Загружаем основной датасет
-    main_df = load_main_dataset()
-    if main_df.empty:
-        print("❌ Нет основного датасета, создаём новый...")
-        main_df = pd.DataFrame()
-    
-    # 2. Загружаем новые примеры
-    feedback_df = load_new_examples()
+    # 1. Загружаем отзывы из БД
+    feedback_df = load_feedback_from_db()
     
     if feedback_df.empty:
-        print("\n Нет новых данных, используем старый датасет")
-        main_df.to_csv(OUTPUT_DATASET, index=False)
-        print(f"   💾 Сохранён: {OUTPUT_DATASET}")
+        print("\n⚠️ В БД нет отзывов для обработки")
         return
     
-    # 3. Определяем колонки признаков
-    if not main_df.empty:
-        feature_cols = [col for col in main_df.columns if col not in ['url', 'label']]
-    else:
-        # Если основного датасета нет, создаём пустой с правильными колонками
-        # Извлекаем признаки для одного URL, чтобы узнать колонки
-        test_features = extract_features("https://example.com")
-        feature_cols = [f'feature_{i}' for i in range(len(test_features))]
-        main_df = pd.DataFrame(columns=['url', 'label'] + feature_cols)
+    # 2. Очистка отзывов
+    print("\n🧹 Очистка URL...")
+    feedback_clean = clean_feedback(feedback_df)
+    print(f"   После очистки: {len(feedback_clean)} записей")
     
-    # 4. Извлекаем признаки для новых URL
-    feedback_features_df = extract_features_for_urls(feedback_df, feature_cols)
+    # 3. Извлечение признаков
+    print("\n⚙️ Извлечение признаков...")
+    feedback_features = extract_features(feedback_clean)
+    print(f"   Признаков: {len(feedback_features.columns) - 2}")  # -2 для url и label
     
-    # 5. Объединяем датасеты
-    combined_df = pd.concat([main_df, feedback_features_df], ignore_index=True)
+    # 4. Загружаем существующий датасет
+    if not Path(DATASET_FILE).exists():
+        print(f"\n❌ ОШИБКА: Датасет не найден: {DATASET_FILE}")
+        print("   Сначала запустите clean_data.py")
+        return
+    
+    current_df = pd.read_csv(DATASET_FILE)
+    current_count = len(current_df)
+    print(f"\n📁 Существующий датасет: {current_count} записей")
+    
+    # 5. Объединяем
+    updated_df = pd.concat([current_df, feedback_features], ignore_index=True)
     
     # 6. Удаляем дубликаты
-    before_dedup = len(combined_df)
-    combined_df = combined_df.drop_duplicates(subset=['url'], keep='last')
-    after_dedup = len(combined_df)
-    print(f"\n🗑️ Удалено дубликатов: {before_dedup - after_dedup}")
+    before_dedup = len(updated_df)
+    updated_df = updated_df.drop_duplicates(subset=['url'], keep='last')
+    after_dedup = len(updated_df)
+    duplicates_removed = before_dedup - after_dedup
     
-    # 7. Проверяем баланс классов
-    if 'label' in combined_df.columns:
-        print(f"\n📊 РАСПРЕДЕЛЕНИЕ КЛАССОВ:")
-        print(f"   Безопасных (0): {(combined_df['label'] == 0).sum()}")
-        print(f"   Опасных (1): {(combined_df['label'] == 1).sum()}")
-        print(f"   Всего: {len(combined_df)}")
+    # 7. Сохраняем
+    updated_df.to_csv(DATASET_FILE, index=False)
     
-    # 8. Сохраняем новый датасет
-    combined_df.to_csv(OUTPUT_DATASET, index=False)
-    print(f"\n✅ НОВЫЙ ДАТАСЕТ СОХРАНЁН:")
-    print(f"   {OUTPUT_DATASET}")
-    print(f"   Размер: {len(combined_df)} записей")
+    # 8. Статистика
+    print(f"\n✅ ДАТАСЕТ ОБНОВЛЁН:")
+    print(f"   Было: {current_count} записей")
+    print(f"   Добавлено: {len(feedback_features)} записей")
+    if duplicates_removed > 0:
+        print(f"   Удалено дубликатов: {duplicates_removed}")
+    print(f"   Стало: {after_dedup} записей")
+    
+    # 9. Распределение классов
+    print(f"\n📊 РАСПРЕДЕЛЕНИЕ КЛАССОВ:")
+    safe_count = (updated_df['label'] == 0).sum()
+    dangerous_count = (updated_df['label'] == 1).sum()
+    print(f"   Безопасных (0): {safe_count}")
+    print(f"   Опасных (1): {dangerous_count}")
+    
+    if after_dedup > 0:
+        ratio = dangerous_count / after_dedup * 100
+        print(f"   Соотношение: {ratio:.1f}% опасных")
+    
+    # 10. Очищаем БД
+    clear_database()
+    
+    print("\n" + "="*50)
+    print("✅ ГОТОВО!")
 
 
-# ОСНОВНОЙ ЗАПУСК 
 if __name__ == '__main__':
-    prepare_dataset()
-    print("\n✅ ПОДГОТОВКА ЗАВЕРШЕНА!")
+    update_dataset()
