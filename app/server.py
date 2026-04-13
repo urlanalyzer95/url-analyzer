@@ -4,24 +4,23 @@ import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
+import math
 
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
 
-# Импорт модуля БД
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
-# Импорт извлечения признаков
 from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
+
 cache = {}
 
-# ---------- Вспомогательные функции ----------
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -48,33 +47,11 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# ---------- Белый список только для главных страниц ----------
-TRUSTED_HOMEPAGES = [
-    'https://google.com',
-    'https://yandex.ru',
-    'https://ya.ru', 
-    'https://github.com',
-    'https://stackoverflow.com',
-    'https://wikipedia.org',
-    'https://youtube.com',
-    'https://instagram.com',
-    'https://facebook.com',
-    'https://twitter.com',
-    'https://amazon.com',
-    'https://apple.com',
-    'https://microsoft.com',
-    'https://reddit.com',
-    'https://linkedin.com'
-]
-
-def is_trusted_homepage(url):
-    normalized = normalize_url(url)
-    return normalized in TRUSTED_HOMEPAGES
-
-# ---------- Загрузка модели и датасета ----------
+# --- Загрузка ML-модели и датасета ---
 model = None
 feature_columns = []
 features_df = None
+
 BASE_DIR = Path(__file__).parent.parent
 
 try:
@@ -91,18 +68,20 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
-# Инициализация БД
 init_db()
 
-# ---------- Функция предсказания ----------
+# --- Функция предсказания (без эвристик) ---
 def predict(url):
+    """
+    Возвращает вероятность фишинга (0.0..1.0) на основе ML-модели.
+    """
     if model is None:
         return 0.5
 
     try:
         url_lower = url.lower().rstrip('/')
 
-        # 1. Поиск в датасете
+        # 1. Точное совпадение в датасете (если есть)
         if features_df is not None and feature_columns:
             if 'url_norm' not in features_df.columns:
                 features_df['url_norm'] = features_df['url'].apply(
@@ -114,30 +93,16 @@ def predict(url):
                 proba = model.predict_proba(X)[0][1]
                 return float(proba)
 
-        # 2. Эвристики
-        if re.search(r'\d{1,3}(\.\d{1,3}){3}', url_lower):
-            return 0.95                     # IP-адрес → опасность 95%
-
-        shorteners = ['bit.ly', 'tinyurl', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly']
-        if any(s in url_lower for s in shorteners):
-            return 0.70                     # Короткая ссылка → подозрительно 70%
-
-        # 3. ML модель
+        # 2. Извлечение признаков и предсказание
         features = extract_features(url)
         features_df_input = pd.DataFrame([features], columns=feature_columns)
         proba = model.predict_proba(features_df_input)[0][1]
-
-        # Ограничение для подозрительных слов (максимум 70%)
-        suspicious_words = ['login', 'verify', 'account', 'secure', 'update', 'confirm', 'signin']
-        if any(word in url_lower for word in suspicious_words):
-            proba = min(proba, 0.70)
-
         return float(proba)
     except Exception as e:
         print(f"ML ошибка: {e}", file=sys.stderr)
         return 0.5
 
-# ---------- Эндпоинты ----------
+# --- Эндпоинты ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -147,7 +112,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v2.0'
+        'model_version': 'v2.0_no_heuristics'
     })
 
 @app.route('/check', methods=['POST'])
@@ -165,19 +130,8 @@ def check_url():
     if cached:
         return jsonify(cached)
 
-    # Проверка по белому списку главных страниц
-    if is_trusted_homepage(url):
-        result = {
-            'url': raw_url,
-            'verdict': 'safe',
-            'verdict_text': '🟢 БЕЗОПАСНО',
-            'score': 0,
-            'explanations': ['Главная страница доверенного сайта']
-        }
-        set_cached(url, result)
-        return jsonify(result)
-
     score = predict(url)
+
     if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
     elif score > 0.5:
@@ -222,12 +176,16 @@ def admin_feedbacks():
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[])
+            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[], 
+                                 current_page=1, total_pages=0, total_feedbacks=0)
 
-        feedbacks = []
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+
+        all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
-            feedbacks.append({
+            all_feedbacks.append({
                 'id': row['id'],
                 'url': row['url'],
                 'model_verdict': row['model_verdict'],
@@ -236,18 +194,34 @@ def admin_feedbacks():
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
-        return render_template('admin.html', feedbacks=feedbacks)
+
+        all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
+
+        total_feedbacks = len(all_feedbacks)
+        total_pages = math.ceil(total_feedbacks / per_page)
+
+        if page < 1:
+            page = 1
+        if page > total_pages and total_pages > 0:
+            page = total_pages
+
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_feedbacks = all_feedbacks[start_idx:end_idx]
+
+        return render_template('admin.html', 
+                             paginated_feedbacks=paginated_feedbacks,
+                             current_page=page,
+                             total_pages=total_pages,
+                             total_feedbacks=total_feedbacks)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
-@app.route('/admin/download-db')
 @app.route('/download-db')
 def download_db():
     try:
         base_dir = Path(__file__).parent.parent
         db_path = base_dir / 'data' / 'feedback.db'
-        print(f"[DEBUG] Ищем БД по пути: {db_path}", file=sys.stderr)
-
         if not db_path.exists():
             alt_paths = [Path('data/feedback.db'), Path('feedback.db')]
             for alt in alt_paths:
@@ -255,13 +229,11 @@ def download_db():
                     db_path = alt
                     break
             else:
-                return f"❌ Файл feedback.db не найден. Искали в: {db_path}", 404
-
+                return f"❌ Файл feedback.db не найден.", 404
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
     except PermissionError:
-        return "❌ Нет прав на чтение файла БД. Проверьте права доступа к папке data/", 403
+        return "❌ Нет прав на чтение файла БД.", 403
     except Exception as e:
-        print(f"[ERROR] Ошибка при скачивании БД: {e}", file=sys.stderr)
         return f"❌ Внутренняя ошибка сервера: {e}", 500
 
 if __name__ == '__main__':
