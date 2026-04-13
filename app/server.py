@@ -136,7 +136,7 @@ def check_url():
 
     if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score > 0.4:
+    elif score > 0.5:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
