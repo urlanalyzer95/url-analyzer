@@ -9,7 +9,7 @@ import math
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
-
+from ml.features import extract_features
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
