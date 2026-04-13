@@ -169,7 +169,7 @@ if __name__ == '__main__':
     
     # 4. Экспорт новых примеров для обучения
     print("\n🎓 ЭКСПОРТ ДЛЯ ОБУЧЕНИЯ:")
-    export_for_retraining(mark_processed=False)
+    export_for_retraining(mark_processed=True)
     
     print("\n" + "="*50)
     print("✅ ЭКСПОРТ ЗАВЕРШЁН!")
