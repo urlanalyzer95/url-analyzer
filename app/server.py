@@ -136,7 +136,7 @@ def check_url():
 
     if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score > 0.5:
+    elif score > 0.4:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
@@ -219,7 +219,9 @@ def admin_feedbacks():
                              total_feedbacks=total_feedbacks)
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
-
+@app.route('/admin/download-db')
+def admin_download_db():
+    return download_db()
 @app.route('/download-db')
 def download_db():
     try:
