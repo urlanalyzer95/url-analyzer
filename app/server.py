@@ -6,23 +6,26 @@ from urllib.parse import urlparse
 from pathlib import Path
 import math
 
-# Добавляем корень проекта в PYTHONPATH, чтобы импортировать ml.features
+# Делаем видимой папку ml (для импорта features)
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
 
+# Импорт модуля БД
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
     from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
 
+# Импорт извлечения признаков
 from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
 cache = {}
 
+# ---------- Вспомогательные функции ----------
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -49,10 +52,11 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# --- Загрузка ML-модели и датасета ---
+# ---------- Загрузка ML-модели и датасета ----------
 model = None
 feature_columns = []
 features_df = None
+
 BASE_DIR = Path(__file__).parent.parent
 
 try:
@@ -69,14 +73,18 @@ try:
 except Exception as e:
     print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
 
+# Инициализация БД
 init_db()
 
-# --- Функция предсказания (без эвристик) ---
+# ---------- Функция предсказания (только ML, без эвристик и белых списков) ----------
 def predict(url):
     if model is None:
         return 0.5
+
     try:
         url_lower = url.lower().rstrip('/')
+
+        # 1. Точное совпадение в датасете
         if features_df is not None and feature_columns:
             if 'url_norm' not in features_df.columns:
                 features_df['url_norm'] = features_df['url'].apply(
@@ -87,6 +95,8 @@ def predict(url):
                 X = row[feature_columns]
                 proba = model.predict_proba(X)[0][1]
                 return float(proba)
+
+        # 2. Извлечение признаков и предсказание
         features = extract_features(url)
         features_df_input = pd.DataFrame([features], columns=feature_columns)
         proba = model.predict_proba(features_df_input)[0][1]
@@ -95,7 +105,7 @@ def predict(url):
         print(f"ML ошибка: {e}", file=sys.stderr)
         return 0.5
 
-# --- Эндпоинты ---
+# ---------- Эндпоинты ----------
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -105,7 +115,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v2.0_no_heuristics'
+        'model_version': 'v2.0_no_heuristics_no_whitelist'
     })
 
 @app.route('/check', methods=['POST'])
@@ -114,19 +124,24 @@ def check_url():
     raw_url = data.get('url', '').strip()
     if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
+
     url = normalize_url(raw_url)
     if not is_valid_url(url):
         return jsonify({'error': 'Невалидный URL'}), 400
+
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
+
     score = predict(url)
-    if score > 0.8:
+
+    if score > 0.9:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score > 0.4:
+    elif score > 0.5:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
+
     result = {
         'url': raw_url,
         'verdict': verdict,
@@ -145,6 +160,7 @@ def feedback():
         model_verdict = data.get('model_verdict', '')
         user_verdict = data.get('user_verdict', '')
         comment = data.get('comment', '')
+
         if url:
             try:
                 normalized = normalize_url(url)
@@ -152,20 +168,24 @@ def feedback():
                     model_verdict = ""
             except:
                 model_verdict = ""
+
         save_feedback(url, model_verdict, user_verdict, comment)
         return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
+@app.route('/admin')
 @app.route('/admin/feedbacks')
 def admin_feedbacks():
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[], 
+            return render_template('admin.html', feedbacks=[], paginated_feedbacks=[],
                                  current_page=1, total_pages=0, total_feedbacks=0)
+
         page = request.args.get('page', 1, type=int)
         per_page = 20
+
         all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
@@ -178,17 +198,22 @@ def admin_feedbacks():
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
+
         all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
+
         total_feedbacks = len(all_feedbacks)
-        total_pages = math.ceil(total_feedbacks / per_page)
+        total_pages = math.ceil(total_feedbacks / per_page) if total_feedbacks > 0 else 1
+
         if page < 1:
             page = 1
         if page > total_pages and total_pages > 0:
             page = total_pages
+
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         paginated_feedbacks = all_feedbacks[start_idx:end_idx]
-        return render_template('admin.html', 
+
+        return render_template('admin.html',
                              paginated_feedbacks=paginated_feedbacks,
                              current_page=page,
                              total_pages=total_pages,
