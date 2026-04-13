@@ -196,7 +196,6 @@ def admin_feedbacks():
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 
-# Функция скачивания БД определена до её использования
 @app.route('/download-db')
 def download_db():
     try:
@@ -215,11 +214,6 @@ def download_db():
         return "❌ Нет прав на чтение файла БД.", 403
     except Exception as e:
         return f"❌ Внутренняя ошибка сервера: {e}", 500
-
-# Дополнительный маршрут /download/db (редирект)
-@app.route('/download/db')
-def download_db_redirect():
-    return download_db()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
