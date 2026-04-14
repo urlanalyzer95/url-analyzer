@@ -1,4 +1,3 @@
-<img width="995" height="826" alt="image" src="https://github.com/user-attachments/assets/1f7d11fd-9e19-49a4-b697-f80a229a4ccc" /># url-analyzer
 Анализатор подозрительности URL
 Сайт доступен по адресу: [https://url-analyzer-k1lf.onrender.com](https://url-analyzer-k1lf.onrender.com)
 
