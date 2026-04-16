@@ -6,8 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 import xgboost as xgb
 import joblib
-
-print(" Сравнение Random Forest vs XGBoost")
+import os
 
 FEATURE_NAMES = [
     'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
@@ -36,7 +35,26 @@ def extract_features(url):
     features['domain_length'] = len(parsed.netloc) if parsed.netloc else 0
     return [features[name] for name in FEATURE_NAMES]
 
-df = pd.read_csv('url_dataset_features.csv')
+print(" Поиск датасета...")
+possible_files = [
+    'url_dataset_features.csv',
+    'data/processed/url_dataset_features.csv',
+    'data/url_dataset_features.csv'
+]
+
+df = None
+for fname in possible_files:
+    if os.path.exists(fname):
+        print(f" Найден: {fname}")
+        df = pd.read_csv(fname)
+        break
+
+if df is None:
+    print(" Датасет не найден!")
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
 
 print("\n Random Forest...")
 rf_start = time.time()
@@ -47,8 +65,7 @@ rf_time = time.time() - rf_start
 rf_pred = rf.predict(X_test)
 rf_acc = accuracy_score(y_test, rf_pred)
 rf_f1 = f1_score(y_test, rf_pred)
-
-print(f"RF: Accuracy={rf_acc:.4f}, F1={rf_f1:.4f}, Time={rf_time:.2f}s")
+print(f" RF: Accuracy={rf_acc:.4f}, F1={rf_f1:.4f}, Time={rf_time:.2f}s")
 
 print("\n XGBoost...")
 xgb_start = time.time()
@@ -62,5 +79,8 @@ xgb_time = time.time() - xgb_start
 xgb_pred = xgb_model.predict(X_test)
 xgb_acc = accuracy_score(y_test, xgb_pred)
 xgb_f1 = f1_score(y_test, xgb_pred)
+print(f" XGB: Accuracy={xgb_acc:.4f}, F1={xgb_f1:.4f}, Time={xgb_time:.2f}s")
 
-print(f"XGB: Accuracy={xgb_acc:.4f}, F1={xgb_f1:.4f}, Time={xgb_time:.2f}s")
+
+winner = "Random Forest" if rf_acc > xgb_acc else "XGBoost"
+print(f"\n ПОБЕДИТЕЛЬ: **{winner}** ({max(rf_acc, xgb_acc):.4f})")
