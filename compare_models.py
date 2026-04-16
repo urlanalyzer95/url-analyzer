@@ -47,10 +47,13 @@ for fname in possible_files:
     if os.path.exists(fname):
         print(f" Найден: {fname}")
         df = pd.read_csv(fname)
+        X = df[FEATURE_NAMES]
+        y = df['label']
         break
 
 if df is None:
     print(" Датасет не найден!")
+    exit(1)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
