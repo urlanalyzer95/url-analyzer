@@ -39,7 +39,7 @@ Phishing URLs Dataset (автор: Hassaan Mustafavi).
 
 Выбор Kaggle-датасета — стандарт современной практики ML:
 
-###  Ключевые научные исследования (2024-2025):
+  Ключевые научные исследования (2024-2025):
 
 1. **"Performance Analysis of Selected Machine Learning Algorithms in the Detection of Phishing Attacks on Vulnerable Websites" (2024)**  
     **Random Forest на Kaggle**: **96.7% accuracy**  
