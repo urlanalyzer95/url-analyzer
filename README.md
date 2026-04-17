@@ -41,17 +41,17 @@ Phishing URLs Dataset (автор: Hassaan Mustafavi).
 
   Ключевые научные исследования (2024-2025):
 
-1. **"Performance Analysis of Selected Machine Learning Algorithms in the Detection of Phishing Attacks on Vulnerable Websites" (2024)**  
-    **Random Forest на Kaggle**: **96.7% accuracy**  
+1. "Performance Analysis of Selected Machine Learning Algorithms in the Detection of Phishing Attacks on Vulnerable Websites" (2024)
+    Random Forest на Kaggle: 96.7% accuracy  
     Подтверждена эффективность датасетов Kaggle для фишинга
 
-2. **"Phishing Attack Detection on URLs Using KNN, RF, DT with GA and K-fold Cross Validation Approach" (2025)**  
-    Сравнение **KNN, RF, DT** на Kaggle-датасете  
-    **Random Forest** — лидер по точности и скорости
+2. "Phishing Attack Detection on URLs Using KNN, RF, DT with GA and K-fold Cross Validation Approach" (2025)  
+    Сравнение KNN, RF, DT на Kaggle-датасете  
+    Random Forest — лидер по точности и скорости
 
-3. **"Analysis of Phishing URLs Based on Machine Learning" (2025)**  
-    **Kaggle-датасеты** для извлечения признаков  
-    Текстовые + доменные признаки = **97%+ accuracy**
+3. "Analysis of Phishing URLs Based on Machine Learning" (2025)  
+    Kaggle-датасеты для извлечения признаков  
+    Текстовые + доменные признаки = 97%+ accuracy
 
 Почему не другие датасеты?
 | Альтернативный датасет | Объём данных | Недостатки для нашей задачи |
