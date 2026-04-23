@@ -1,0 +1,8 @@
+import pandas as pd
+import joblib
+
+df = pd.read_csv('data/processed/url_dataset_features.csv')
+feature_cols = [c for c in df.columns if c not in ['url', 'label']]
+means = df[feature_cols].mean().values
+joblib.dump(means, 'ml/feature_means.pkl')
+print("Saved means to ml/feature_means.pkl")
