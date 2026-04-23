@@ -28,14 +28,11 @@ class ModelExplainer:
             self.means = joblib.load('ml/feature_means.pkl')
         except:
             self.means = None
+            print("⚠️ feature_means.pkl не найден")
 
     def predict_with_explanation(self, url):
         features_raw = extract_features(url)
-        # Преобразуем в плоский список, если это DataFrame/Series
-        if isinstance(features_raw, (pd.DataFrame, pd.Series)):
-            features = features_raw.iloc[0].tolist() if hasattr(features_raw, 'iloc') else features_raw.tolist()
-        else:
-            features = list(features_raw)  # на случай, если это массив
+        features = features_raw.iloc[0].tolist()
 
         X = np.array(features).reshape(1, -1)
         proba = self.model.predict_proba(X)[0][1]
@@ -46,7 +43,8 @@ class ModelExplainer:
         return {
             'prediction': 'phishing' if pred == 1 else 'legitimate',
             'probability': round(proba * 100, 2),
-            'reasons': reasons
+            'reasons': reasons,
+            'global_importance': dict(zip(self.feature_names, self.global_importance.tolist()))
         }
 
     def _generate_reasons(self, features, pred, proba):
@@ -55,13 +53,13 @@ class ModelExplainer:
             for i, name in enumerate(self.feature_names):
                 value = features[i]
                 if name.startswith('has_') and value == 1:
-                    reasons.append(self.feature_comments.get(name, name))
+                    reasons.append(f"⚠️ {self.feature_comments.get(name, name)}")
                 elif self.means is not None and not name.startswith('has_'):
                     mean_val = self.means[i]
                     if value > mean_val * 1.5:
-                        reasons.append(f'{self.feature_comments.get(name, name)} (значение {value}, выше среднего)')
+                        reasons.append(f"{self.feature_comments.get(name, name)} (значение {int(value)}, выше среднего)")
             if not reasons:
                 reasons.append('URL содержит признаки, типичные для фишинга')
         else:
-            reasons.append('Подозрительных признаков не обнаружено')
+            reasons.append('✅ Подозрительных признаков не обнаружено')
         return reasons[:5]
