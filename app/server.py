@@ -137,21 +137,14 @@ def check_url():
     if cached:
         return jsonify(cached)
 
-    # Белый список доверенных главных страниц (опционально)
-    if is_trusted_homepage(url):
-        result = {
-            'url': raw_url,
-            'verdict': 'safe',
-            'verdict_text': '🟢 БЕЗОПАСНО',
-            'score': 0,
-            'explanations': ['Доверенный домен']
-        }
-        set_cached(url, result)
-        return jsonify(result)
+    # УДАЛИТЕ ВЕСЬ ЭТОТ БЛОК:
+    # if is_trusted_homepage(url):
+    #     result = {...}
+    #     return jsonify(result)
 
     # Объяснение от модели
     explanation = explainer.predict_with_explanation(url)
-    probability = explanation['probability'] / 100.0   # если приходит в процентах
+    probability = explanation['probability'] / 100.0
 
     if probability > 0.75:
         verdict, text = "dangerous", "🔴 ОПАСНО"
@@ -169,7 +162,7 @@ def check_url():
     }
     set_cached(url, result)
     return jsonify(result)
-
+    
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
