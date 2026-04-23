@@ -12,7 +12,7 @@ def extract_features(url):
     features['num_dots'] = url.count('.')
     features['num_hyphens'] = url.count('-')
     features['num_slashes'] = url.count('/')
-    features['num_params'] = 0
+    features['num_params'] = len(re.findall(r'[?&]', url))  
     features['has_ip'] = 1 if re.search(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', url) else 0
     features['has_https'] = 1 if url.startswith('https://') else 0
     features['has_login'] = 1 if 'login' in url.lower() else 0
