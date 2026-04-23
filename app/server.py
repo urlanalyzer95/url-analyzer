@@ -9,7 +9,8 @@ import math
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
-
+from ml.explain_model import ModelExplainer
+explainer = ModelExplainer()
 # ---- Подключение модуля работы с БД (feedback.db) ----
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
@@ -117,6 +118,10 @@ def health():
         'model_version': 'v2.0_no_heuristics'
     })
 
+
+
+
+
 @app.route('/check', methods=['POST'])
 def check_url():
     data = request.json
@@ -132,11 +137,25 @@ def check_url():
     if cached:
         return jsonify(cached)
 
-    score = predict(url)
+    # Белый список доверенных главных страниц (опционально)
+    if is_trusted_homepage(url):
+        result = {
+            'url': raw_url,
+            'verdict': 'safe',
+            'verdict_text': '🟢 БЕЗОПАСНО',
+            'score': 0,
+            'explanations': ['Доверенный домен']
+        }
+        set_cached(url, result)
+        return jsonify(result)
 
-    if score > 0.75:
+    # Объяснение от модели
+    explanation = explainer.predict_with_explanation(url)
+    probability = explanation['probability'] / 100.0   # если приходит в процентах
+
+    if probability > 0.75:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score > 0.4:
+    elif probability > 0.4:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
@@ -145,8 +164,8 @@ def check_url():
         'url': raw_url,
         'verdict': verdict,
         'verdict_text': text,
-        'score': round(score * 100),
-        'explanations': ["ML модель определила уровень опасности"]
+        'score': round(probability * 100),
+        'explanations': explanation['reasons']
     }
     set_cached(url, result)
     return jsonify(result)
