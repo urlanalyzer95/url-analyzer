@@ -118,14 +118,11 @@ def health():
         'model_version': 'v2.0_no_heuristics'
     })
 
-
-
-
-
 @app.route('/check', methods=['POST'])
 def check_url():
     data = request.json
     raw_url = data.get('url', '').strip()
+    
     if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
 
@@ -137,15 +134,13 @@ def check_url():
     if cached:
         return jsonify(cached)
 
-    # УДАЛИТЕ ВЕСЬ ЭТОТ БЛОК:
-    # if is_trusted_homepage(url):
-    #     result = {...}
-    #     return jsonify(result)
+    # ✅ ❌ УДАЛЕНО: if is_trusted_homepage(url):  ← БАГ ИСПРАВЛЕН!
 
-    # Объяснение от модели
+    # 🔥 ML объяснения
     explanation = explainer.predict_with_explanation(url)
     probability = explanation['probability'] / 100.0
 
+    # 3 уровня (как ты хочешь)
     if probability > 0.75:
         verdict, text = "dangerous", "🔴 ОПАСНО"
     elif probability > 0.4:
