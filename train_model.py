@@ -11,11 +11,12 @@ from pathlib import Path
 from ml.features import extract_features
 
 def to_list(features):
-    """Преобразует результат extract_features в плоский список"""
+    """Преобразует результат extract_features в плоский список чисел"""
     if hasattr(features, 'tolist'):
-        return features.tolist()
+        lst = features.tolist()
     else:
-        return list(features)
+        lst = list(features)
+    return [float(x) for x in lst]
 
 def main():
     BASE_DIR = Path(__file__).parent
@@ -104,18 +105,25 @@ def main():
         df = pd.concat([df, dangerous_df], ignore_index=True)
         print(f"Добавлено {len(new_dangerous)} опасных URL")
 
-    # ----------------------------------------------
+    # ---------- 4. Очистка и преобразование типов ----------
+    # Принудительно преобразуем признаки в числа (на случай, если попали строки)
+    for col in feature_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Удаляем строки с NaN
+    df = df.dropna(subset=feature_cols)
+    df = df.reset_index(drop=True)
 
-    X = df[feature_cols]
-    y = df['label']
+    X = df[feature_cols].values  # берем numpy массив
+    y = df['label'].values
+
+    print(f"После очистки: признаков {X.shape[1]}, примеров {X.shape[0]}")
+    print(f"Распределение классов: 0={np.sum(y==0)}, 1={np.sum(y==1)}")
 
     # Разделение
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    print(f"\nПризнаков: {X.shape[1]}")
-    print(f"Train: {X_train.shape}")
-    print(f"Test: {X_test.shape}")
+    print(f"Train: {X_train.shape}, Test: {X_test.shape}")
 
     # Обучение
     print("\nОбучаем Random Forest...")
@@ -155,7 +163,7 @@ def main():
     avg_ms = elapsed / sample_size * 1000
     print(f"\nСреднее время инференса (на 1 URL): {avg_ms:.4f} мс")
 
-    # ---------- Ручная проверка на контрольных URL ----------
+    # Ручная проверка на контрольных URL
     print("\n🔍 Проверка на контрольных URL:")
     test_urls = [
         ('https://google.com', 'ожидается safe (≈0%)'),
@@ -170,7 +178,6 @@ def main():
         feats_list = to_list(feats)
         proba = model.predict_proba([feats_list])[0][1]
         print(f"{url:50} {proba:.2%}   ({note})")
-    # ------------------------------------------------
 
     # Сохранение
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
