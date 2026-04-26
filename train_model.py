@@ -132,7 +132,7 @@ def main():
     ]
     for url, note in test_urls:
         feats = extract_features(url)
-        proba = model.predict_proba([np.array(feats, dtype=np.float32)])[0][1]
+        proba = model.predict_proba(np.array(feats, dtype=np.float32).reshape(1, -1))[0][1]
         print(f"{url:50} {proba:.2%}   ({note})")
 
     # Сохранение
