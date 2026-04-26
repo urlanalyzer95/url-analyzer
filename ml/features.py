@@ -29,3 +29,10 @@ def extract_features(url):
         features['domain_length'] = len(url)
     
     return pd.DataFrame([features])[feature_cols]
+
+# ml/features.py — КОНЕЦ файла добавь:
+feature_cols = ['url_length','num_dots','num_hyphens','num_slashes','num_params',
+                'has_ip','has_https','has_login','has_verify','has_account',
+                'has_cp.php','has_admin','is_shortened','domain_length']
+
+# ✅ Теперь импортируется!
