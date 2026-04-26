@@ -85,8 +85,6 @@ def main():
     joblib.dump(feature_cols, BASE_DIR / 'ml' / 'feature_cols.pkl')
     print("\\nМодель сохранена в ml/model.pkl")
 
-if __name__ == '__main__':
-    main()
 # Добавь в конец train.py:
 test_urls = [
     "https://google.com", "https://yandex.ru",
@@ -97,3 +95,7 @@ for url in test_urls:
     features = extract_features(url)
     proba = model.predict_proba(pd.DataFrame([features]))[0][1]
     print(f"{url}: {proba*100:.1f}%")
+
+
+if __name__ == '__main__':
+    main()
