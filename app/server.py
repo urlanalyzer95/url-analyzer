@@ -10,6 +10,27 @@ import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
 from ml.explain_model import ModelExplainer
+# после других импортов
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
+# Инициализация
+auth = HTTPBasicAuth()
+
+# Чтение пароля из переменной окружения (или использование значения по умолчанию)
+# ⚠️ ВАЖНО: на сервере всегда устанавливайте свою переменную ADMIN_PASSWORD
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'default_secret_change_me')
+users = {
+    "admin": generate_password_hash(ADMIN_PASSWORD)
+}
+
+@auth.verify_password
+def verify_password(username, password):
+    if username in users and check_password_hash(users.get(username), password):
+        return username
+    return None
+    
 explainer = ModelExplainer()
 # ---- Подключение модуля работы с БД (feedback.db) ----
 try:
@@ -182,6 +203,7 @@ def feedback():
 
 @app.route('/admin')
 @app.route('/admin/feedbacks')
+@auth.login_required
 def admin_feedbacks():
     try:
         df = get_all_feedbacks()
@@ -227,6 +249,7 @@ def admin_feedbacks():
     except Exception as e:
         return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
 @app.route('/admin/download-db')
+@auth.login_required
 def admin_download_db():
     return download_db()
 @app.route('/download-db')
