@@ -14,12 +14,8 @@ from ml.explain_model import ModelExplainer
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-
-# Инициализация
 auth = HTTPBasicAuth()
 
-# Чтение пароля из переменной окружения (или использование значения по умолчанию)
-# ⚠️ ВАЖНО: на сервере всегда устанавливайте свою переменную ADMIN_PASSWORD
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'default_secret_change_me')
 users = {
     "admin": generate_password_hash(ADMIN_PASSWORD)
@@ -162,7 +158,7 @@ def check_url():
     probability = explanation['probability'] / 100.0
 
     # 3 уровня (как ты хочешь)
-    if probability > 0.75:
+    if probability > 0.97:
         verdict, text = "dangerous", "🔴 ОПАСНО"
     elif probability > 0.4:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
