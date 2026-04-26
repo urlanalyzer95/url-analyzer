@@ -37,21 +37,16 @@ Phishing URLs Dataset (автор: Hassaan Mustafavi).
 
 2. Изученные источники и статьи
 
-Выбор Kaggle-датасета — стандарт современной практики ML:
+В ходе работы над проектом мы изучили несколько современных научных статей, в которых авторы также используют датасеты с Kaggle для обнаружения фишинга по URL. Эти работы подтверждают эффективность выбранной нами методологии:
 
-  Ключевые научные исследования (2024-2025):
+"Performance Analysis of Selected Machine Learning Algorithms in the Detection of Phishing Attacks on Vulnerable Websites" (2024)
+В исследовании на датасете Kaggle достигнута точность 96.7% с помощью Random Forest. Это прямое подтверждение того, что Kaggle-датасеты дают высокое качество, а Random Forest — один из лучших алгоритмов для этой задачи.
 
-1. "Performance Analysis of Selected Machine Learning Algorithms in the Detection of Phishing Attacks on Vulnerable Websites" (2024)
-    Random Forest на Kaggle: 96.7% accuracy  
-    Подтверждена эффективность датасетов Kaggle для фишинга
+"Phishing Attack Detection on URLs Using KNN, RF, DT with GA and K-fold Cross Validation Approach" (2025)
+Авторы сравнивают несколько алгоритмов (KNN, Random Forest, Decision Tree) на Kaggle-датасете и показывают, что Random Forest превосходит другие методы по точности и времени обучения. Это обосновывает наш выбор модели.
 
-2. "Phishing Attack Detection on URLs Using KNN, RF, DT with GA and K-fold Cross Validation Approach" (2025)  
-    Сравнение KNN, RF, DT на Kaggle-датасете  
-    Random Forest — лидер по точности и скорости
-
-3. "Analysis of Phishing URLs Based on Machine Learning" (2025)  
-    Kaggle-датасеты для извлечения признаков  
-    Текстовые + доменные признаки = 97%+ accuracy
+"Analysis of Phishing URLs Based on Machine Learning" (2025)
+В этой работе подчёркивается, что Kaggle-датасеты позволяют извлекать разнообразные признаки (текстовые, визуальные, доменные), что критически важно для построения надёжной модели. Авторы сообщают о точности >97% при использовании комбинации признаков.
 
 Почему не другие датасеты?
 | Альтернативный датасет | Объём данных | Недостатки для нашей задачи |
