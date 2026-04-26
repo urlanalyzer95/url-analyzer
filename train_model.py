@@ -10,27 +10,17 @@ import sys
 from pathlib import Path
 from ml.features import extract_features
 
-def to_list(features):
-    """Преобразует результат extract_features в плоский список чисел"""
-    if hasattr(features, 'tolist'):
-        lst = features.tolist()
-    else:
-        lst = list(features)
-    return [float(x) for x in lst]
-
 def main():
     BASE_DIR = Path(__file__).parent
-
-    # 1. Загрузка основного датасета
     dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
     if not dataset_path.exists():
         print(f"❌ Датасет не найден: {dataset_path}")
         sys.exit(1)
 
+    # Загрузка основного датасета
     df = pd.read_csv(dataset_path)
-    print(f"Загружаем датасет...")
-    print(f"Размер: {df.shape}")
-    print(f"Классы 0(легит)/1(фишинг):\n{df['label'].value_counts()}")
+    print(f"Загружено: {df.shape}")
+    print(f"Классы:\n{df['label'].value_counts()}")
 
     feature_cols = [
         'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
@@ -38,7 +28,9 @@ def main():
         'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
     ]
 
-    # ---------- 2. Добавление безопасных URL (label=0) ----------
+    # Добавление безопасных и опасных примеров через списки
+    additional_data = []  # (features, label)
+
     safe_urls = [
         'https://google.com',
         'https://yandex.ru',
@@ -55,68 +47,35 @@ def main():
         'https://microsoft.com',
         'https://reddit.com',
         'https://linkedin.com',
-        'https://whatsapp.com',
-        'https://telegram.org',
-        'https://zoom.us',
-        'https://netflix.com',
-        'https://spotify.com',
-        'https://twitch.tv',
-        'https://discord.com',
-        'https://yahoo.com',
-        'https://bing.com'
     ]
-
-    new_safe = []
     for url in safe_urls:
         if 'url' in df.columns and url in df['url'].values:
             continue
         feats = extract_features(url)
-        new_safe.append(to_list(feats))
+        additional_data.append((feats, 0))
 
-    if new_safe:
-        safe_df = pd.DataFrame(new_safe, columns=feature_cols)
-        safe_df['label'] = 0
-        safe_df['url'] = safe_urls[:len(new_safe)]
-        df = pd.concat([df, safe_df], ignore_index=True)
-        print(f"Добавлено {len(new_safe)} безопасных URL")
-
-    # ---------- 3. Добавление опасных URL (label=1) ----------
     dangerous_urls = [
         'http://185.130.5.253/login',
-        'http://185.130.5.253/secure',
         'http://bit.ly/3xYz7Kq',
         'http://tinyurl.com/secure-login',
-        'http://goo.gl/verify-account',
         'http://login.secure-update.ru/account/verify',
-        'http://paypal.com.secure-login.xyz/login'
     ]
-
-    new_dangerous = []
     for url in dangerous_urls:
         if 'url' in df.columns and url in df['url'].values:
             continue
         feats = extract_features(url)
-        new_dangerous.append(to_list(feats))
+        additional_data.append((feats, 1))
 
-    if new_dangerous:
-        dangerous_df = pd.DataFrame(new_dangerous, columns=feature_cols)
-        dangerous_df['label'] = 1
-        dangerous_df['url'] = dangerous_urls[:len(new_dangerous)]
-        df = pd.concat([df, dangerous_df], ignore_index=True)
-        print(f"Добавлено {len(new_dangerous)} опасных URL")
+    # Создаём массивы признаков и меток из исходного датасета
+    X = df[feature_cols].values.astype(np.float32)
+    y = df['label'].values.astype(np.int32)
 
-    # ---------- 4. Очистка и преобразование типов ----------
-    # Принудительно преобразуем признаки в числа (на случай, если попали строки)
-    for col in feature_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    # Удаляем строки с NaN
-    df = df.dropna(subset=feature_cols)
-    df = df.reset_index(drop=True)
+    # Добавляем новые данные в конец
+    for feats, label in additional_data:
+        X = np.vstack([X, np.array(feats, dtype=np.float32)])
+        y = np.append(y, label)
 
-    X = df[feature_cols].values  # берем numpy массив
-    y = df['label'].values
-
-    print(f"После очистки: признаков {X.shape[1]}, примеров {X.shape[0]}")
+    print(f"После добавления: {X.shape[0]} примеров, {X.shape[1]} признаков")
     print(f"Распределение классов: 0={np.sum(y==0)}, 1={np.sum(y==1)}")
 
     # Разделение
@@ -138,7 +97,6 @@ def main():
     model.fit(X_train, y_train)
     print("Обучение завершено!")
 
-    # Оценка
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"\nТОЧНОСТЬ: {accuracy:.4f} ({accuracy*100:.2f}%)")
@@ -146,7 +104,6 @@ def main():
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred, target_names=['legitimate', 'phishing']))
 
-    # Важность признаков
     importances = model.feature_importances_
     indices = np.argsort(importances)[::-1]
     print("\nТОП-10 ПРИЗНАКОВ:")
@@ -163,20 +120,19 @@ def main():
     avg_ms = elapsed / sample_size * 1000
     print(f"\nСреднее время инференса (на 1 URL): {avg_ms:.4f} мс")
 
-    # Ручная проверка на контрольных URL
+    # Ручная проверка
     print("\n🔍 Проверка на контрольных URL:")
     test_urls = [
-        ('https://google.com', 'ожидается safe (≈0%)'),
-        ('https://yandex.ru', 'ожидается safe (≈0%)'),
-        ('https://github.com', 'ожидается safe (≈0%)'),
-        ('https://login-verify.com', 'ожидается suspicious (~50%)?'),
-        ('http://185.130.5.253/login', 'ожидается dangerous (>90%)'),
-        ('http://bit.ly/xxx', 'ожидается dangerous (>90%)'),
+        ('https://google.com', 'safe'),
+        ('https://yandex.ru', 'safe'),
+        ('https://github.com', 'safe'),
+        ('https://login-verify.com', '?'),
+        ('http://185.130.5.253/login', 'dangerous'),
+        ('http://bit.ly/xxx', 'dangerous'),
     ]
     for url, note in test_urls:
         feats = extract_features(url)
-        feats_list = to_list(feats)
-        proba = model.predict_proba([feats_list])[0][1]
+        proba = model.predict_proba([np.array(feats, dtype=np.float32)])[0][1]
         print(f"{url:50} {proba:.2%}   ({note})")
 
     # Сохранение
