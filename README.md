@@ -64,7 +64,7 @@ Phishing URLs Dataset (автор: Hassaan Mustafavi).
 | num_dots      | Много точек → попытка скрыть реальный домен (paypal.com.attacker.com).                 |
 | num_hyphens   | Дефисы маскируют домен (secure-pay-pal.com).                              |
 | num_slashes   | Глубокие пути увеличивают длину (/login/secure/verify/).                               |
-| num_params    | Параметры ? и & типичны для фишинга (?session=abc&redirect=evil).                      |
+| num_params    | Множество GET-параметров (?id=123&token=abc) типично для фишинга — сбор данных, сессий, редиректов.                     |
 | has_ip        | IP-адрес вместо домена – почти всегда фишинг (185.13.55.2).                            |
 | has_https     | Фишеры используют бесплатные SSL (Let's Encrypt), признак полезный, но не решающий.    |
 | has_login     | Ключевые слова login типичны для фишинговых страниц.                                   |
