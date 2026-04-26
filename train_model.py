@@ -10,6 +10,13 @@ import sys
 from pathlib import Path
 from ml.features import extract_features
 
+def to_list(features):
+    """Преобразует результат extract_features в плоский список"""
+    if hasattr(features, 'tolist'):
+        return features.tolist()
+    else:
+        return list(features)
+
 def main():
     BASE_DIR = Path(__file__).parent
 
@@ -60,11 +67,10 @@ def main():
 
     new_safe = []
     for url in safe_urls:
-        # Пропускаем, если URL уже есть в датасете
         if 'url' in df.columns and url in df['url'].values:
             continue
         feats = extract_features(url)
-        new_safe.append(feats)
+        new_safe.append(to_list(feats))
 
     if new_safe:
         safe_df = pd.DataFrame(new_safe, columns=feature_cols)
@@ -89,7 +95,7 @@ def main():
         if 'url' in df.columns and url in df['url'].values:
             continue
         feats = extract_features(url)
-        new_dangerous.append(feats)
+        new_dangerous.append(to_list(feats))
 
     if new_dangerous:
         dangerous_df = pd.DataFrame(new_dangerous, columns=feature_cols)
@@ -161,7 +167,8 @@ def main():
     ]
     for url, note in test_urls:
         feats = extract_features(url)
-        proba = model.predict_proba([feats])[0][1]
+        feats_list = to_list(feats)
+        proba = model.predict_proba([feats_list])[0][1]
         print(f"{url:50} {proba:.2%}   ({note})")
     # ------------------------------------------------
 
