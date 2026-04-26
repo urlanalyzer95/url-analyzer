@@ -88,12 +88,7 @@ def main():
     avg_inference_time_ms = elapsed / sample_size * 1000
     print(f"\nInference time per URL: {avg_inference_time_ms:.4f} ms")
 
-    print("\n" + "="*60)
     print("CONTROL URL TEST")
-    print("="*60)
-    print(f"{'URL':<35} {'Risk %':<8} {'Verdict'}")
-    print("-"*60)
-
     test_urls = ["https://google.com", "https://yandex.ru", "http://185.130.5.253/login"]
     for url in test_urls:
         feats = extract_features(url)
