@@ -11,9 +11,12 @@ from pathlib import Path
 
 from ml.features import extract_features
 
-feature_cols = ['url_length','num_dots','num_hyphens','num_slashes','num_params',
-                'has_ip','has_https','has_login','has_verify','has_account',
-                'has_cp.php','has_admin','is_shortened','domain_length']
+# Список признаков (используется и для обучения, и для извлечения)
+feature_cols = [
+    'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
+    'has_ip', 'has_https', 'has_login', 'has_verify', 'has_account',
+    'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
+]
 
 def main():
     BASE_DIR = Path(__file__).parent
@@ -26,8 +29,9 @@ def main():
     df = pd.read_csv(dataset_path)
     print(f"Loading dataset...")
     print(f"Shape: {df.shape}")
-    print(f"Classes 0(legit)/1(phishing):\n{df['label'].value_counts()}")
+    print(f"Classes 0(legit)/1(phishing):\\n{df['label'].value_counts()}")
 
+    # Добавляем безопасные URL (label=0)
     safe_urls = [
         'https://google.com', 'https://yandex.ru', 'https://vk.com', 'https://github.com'
     ]
@@ -43,6 +47,7 @@ def main():
         df = pd.concat([df, safe_df], ignore_index=True)
         print(f"Added {len(new_safe)} safe URLs")
 
+    # Добавляем опасные URL (label=1)
     dangerous_urls = [
         'http://185.130.5.253/login', 'http://bit.ly/xxx'
     ]
@@ -58,6 +63,7 @@ def main():
         df = pd.concat([df, dangerous_df], ignore_index=True)
         print(f"Added {len(new_dangerous)} dangerous URLs")
 
+    # Преобразование в числовые типы
     for col in feature_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -66,29 +72,31 @@ def main():
     X = df[feature_cols].astype(np.float32).values
     y = df['label'].astype(int).values
 
-    print(f"\nFinal dataset: {X.shape[0]} examples")
+    print(f"\\nFinal dataset: {X.shape[0]} examples")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    print("\nTraining Random Forest...")
+    print("\\nTraining Random Forest...")
     model = RandomForestClassifier(n_estimators=200, max_depth=15, random_state=42, n_jobs=-1)
     model.fit(X_train, y_train)
     print("Training finished!")
 
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
-    print(f"\nACCURACY: {accuracy:.4f} ({accuracy*100:.2f}%)")
+    print(f"\\nACCURACY: {accuracy:.4f} ({accuracy*100:.2f}%)")
 
+    # Время инференса
     sample_size = 1000
     X_sample = X_test[:sample_size]
     start_time = time.perf_counter()
     _ = model.predict(X_sample)
     elapsed = time.perf_counter() - start_time
     avg_inference_time_ms = elapsed / sample_size * 1000
-    print(f"\nInference time per URL: {avg_inference_time_ms:.4f} ms")
+    print(f"\\nInference time per URL: {avg_inference_time_ms:.4f} ms")
 
-    print("CONTROL URL TEST")
+    # Тест контрольных URL
+    print("\\nCONTROL URL TEST")
     test_urls = ["https://google.com", "https://yandex.ru", "http://185.130.5.253/login"]
     for url in test_urls:
         feats = extract_features(url)
@@ -101,10 +109,18 @@ def main():
             verdict = "DANGEROUS"
         print(f"{url:<35} {proba:>6.1f}% {verdict}")
 
+    # Сохраняем только модель (feature_cols.pkl не нужен)
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
     joblib.dump(model, BASE_DIR / 'ml' / 'model.pkl')
-    joblib.dump(feature_cols, BASE_DIR / 'ml' / 'feature_cols.pkl')
-    print(f"\nModel saved to ml/model.pkl")
+    print(f"\\nModel saved to ml/model.pkl")
+
+    # Проверка сохранения
+    print("\\nVerifying saved model...")
+    test_model = joblib.load(BASE_DIR / 'ml' / 'model.pkl')
+    print(f"Loaded model type: {type(test_model).__name__}")
+    if hasattr(test_model, 'n_estimators'):
+        print(f"n_estimators: {test_model.n_estimators}")
+    print("Verification passed.")
 
 if __name__ == '__main__':
     main()
