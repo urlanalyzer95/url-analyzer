@@ -73,12 +73,19 @@ feature_columns = []
 features_df = None
 
 BASE_DIR = Path(__file__).parent.parent
-
 try:
     model_path = BASE_DIR / 'ml' / 'model.pkl'
     if model_path.exists():
         model = joblib.load(model_path)
+        # Отладочный вывод вероятности для google.com
+        test_url = 'https://google.com'
+        features = extract_features(test_url).values.reshape(1, -1)
+        prob = model.predict_proba(features)[0][1]
+        print(f"[DEBUG] google.com probability: {prob:.3f}", file=sys.stderr)
         print(f"✅ Модель загружена из {model_path}", file=sys.stderr)
+except Exception as e:
+    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
+    model = None
 
     dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
     if dataset_path.exists():
