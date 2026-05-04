@@ -4,9 +4,14 @@ import pandas as pd
 from ml.features import extract_features
 
 class ModelExplainer:
-    def __init__(self, model_path='ml/model.pkl', feature_cols_path='ml/feature_cols.pkl'):
+    def __init__(self, model_path='ml/model.pkl'):
         self.model = joblib.load(model_path)
-        self.feature_names = joblib.load(feature_cols_path)
+        # Явно задаём порядок признаков (совпадает с train_model.py)
+        self.feature_names = [
+            'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
+            'has_ip', 'has_https', 'has_login', 'has_verify', 'has_account',
+            'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
+        ]
         self.global_importance = self.model.feature_importances_
         self.feature_comments = {
             'url_length': 'Длина URL (фишинговые часто длиннее)',
@@ -31,7 +36,6 @@ class ModelExplainer:
 
     def predict_with_explanation(self, url):
         features_raw = extract_features(url)
-        # Преобразуем в список, если это DataFrame/Series
         if isinstance(features_raw, (pd.DataFrame, pd.Series)):
             features = features_raw.iloc[0].tolist() if hasattr(features_raw, 'iloc') else features_raw.tolist()
         else:
