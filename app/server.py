@@ -158,9 +158,9 @@ def check_url():
     probability = explanation['probability'] / 100.0
 
     # 3 уровня (как ты хочешь)
-    if probability > 0.85:
+    if probability > 0.70:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif probability > 0.55:
+    elif probability > 0.40:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
