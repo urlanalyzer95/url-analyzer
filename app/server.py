@@ -157,12 +157,9 @@ def check_url():
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
-
-    # ✅ ❌ УДАЛЕНО: if is_trusted_homepage(url):  ← БАГ ИСПРАВЛЕН!
-
-    # 🔥 ML объяснения
-    explanation = explainer.predict_with_explanation(url)
-    probability = explanation['probability'] / 100.0
+ 
+    score = predict(url)
+    probability = score
 
     # 3 уровня (как ты хочешь)
     if probability > 0.70:
