@@ -10,7 +10,6 @@ import os
 import sys
 from pathlib import Path
 
-# Импортируем признаки из единого источника — гарантия совместимости
 from ml.features import extract_features, feature_cols
 
 
@@ -27,8 +26,8 @@ def main():
     print(f"Shape: {df.shape}")
     print(f"Classes 0(legit)/1(phishing):\n{df['label'].value_counts()}")
 
-    # === Добавление дополнительных легитимных и опасных URL для баланса ===
-    # Только чистые домены, без /login, /account и т.п. — чтобы не вносить шум
+    # === КРИТИЧНО: Только ЧИСТЫЕ легитимные домены, БЕЗ /login, /account и т.п. ===
+    # Любое подозрительное слово в легитимном URL создаёт конфликт с фишинговым датасетом
     safe_urls = [
         'https://google.com', 'https://yandex.ru', 'https://www.microsoft.com',
         'https://www.apple.com', 'https://www.amazon.com', 'https://www.wikipedia.org',
@@ -40,6 +39,10 @@ def main():
         'https://mit.edu', 'https://stanford.edu', 'https://harvard.edu',
         'https://www.ebay.com', 'https://www.adobe.com', 'https://www.zoom.us',
         'https://www.slack.com', 'https://www.telegram.org', 'https://www.booking.com',
+        'https://www.airbnb.com', 'https://www.ikea.com', 'https://www.salesforce.com',
+        'https://www.office.com', 'https://www.coursera.org', 'https://www.edx.org',
+        'https://www.reddit.com', 'https://www.twitter.com', 'https://www.instagram.com',
+        'https://www.linkedin.com', 'https://www.facebook.com', 'https://www.whatsapp.com',
     ]
     
     for url in safe_urls:
@@ -47,13 +50,15 @@ def main():
             feats = extract_features(url).iloc[0].to_dict()
             df = pd.concat([df, pd.DataFrame([{**feats, 'label': 0}])], ignore_index=True)
         except Exception:
-            pass  # Пропускаем, если не удалось извлечь признаки
+            pass
     
+    # Опасные URL — только явно фишинговые
     dangerous_urls = [
         'http://185.130.5.253/login',
         'http://bit.ly/xxx',
         'https://secure-paypal-verify.account-login.cp.php.evil.com',
         'http://goo.gl/malware',
+        'https://login-verify-account-update.cp.php.bad-domain.ru',
     ]
     
     for url in dangerous_urls:
@@ -64,11 +69,8 @@ def main():
             pass
 
     # === Очистка данных ===
-    # Удаление дубликатов по признакам + метке
     df = df.drop_duplicates(subset=feature_cols + ['label'])
-    # Заполнение пропусков нулями (на случай битых строк)
     df[feature_cols] = df[feature_cols].fillna(0)
-    # Удаление строк с NaN в признаках
     df = df.dropna(subset=feature_cols).reset_index(drop=True)
 
     print(f"\nFinal dataset: {len(df)} examples")
@@ -77,7 +79,6 @@ def main():
     X = df[feature_cols].astype(np.float32).values
     y = df['label'].astype(int).values
 
-    # Разделение с сохранением баланса классов
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -86,38 +87,37 @@ def main():
     print("\nTraining Random Forest...")
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=15,
-        min_samples_split=10,    # защита от переобучения
-        min_samples_leaf=5,      # защита от шума
-        class_weight='balanced', # КРИТИЧНО: делает вероятности адекватными
+        max_depth=12,              # чуть меньше — защита от переобучения
+        min_samples_split=20,      # больше — устойчивее к шуму
+        min_samples_leaf=10,       # больше — сглаживает редкие комбинации
+        class_weight='balanced',   # КРИТИЧНО: делает вероятности адекватными
         random_state=42,
         n_jobs=-1
     )
     model.fit(X_train, y_train)
     print("Training finished!")
 
-    # === Оценка на тестовой выборке ===
+    # === Оценка ===
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"\nACCURACY: {accuracy:.4f} ({accuracy*100:.2f}%)")
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred, target_names=['Legitimate', 'Phishing']))
 
-    # === Замер времени инференса ===
+    # === Замер скорости ===
     sample_size = min(1000, len(X_test))
     start_time = time.perf_counter()
     _ = model.predict(X_test[:sample_size])
     elapsed = time.perf_counter() - start_time
-    avg_time_ms = (elapsed / sample_size) * 1000
-    print(f"\nInference time per URL: {avg_time_ms:.4f} ms")
+    print(f"\nInference time per URL: {(elapsed / sample_size * 1000):.4f} ms")
 
-    # === Контрольный тест на проблемных URL ===
+    # === Контрольный тест ===
     print("\nCONTROL URL TEST")
     test_cases = [
-        ("https://google.com", 0),           # должен быть SAFE (<40%)
-        ("https://yandex.ru", 0),            # должен быть SAFE
-        ("http://185.130.5.253/login", 1),   # должен быть DANGEROUS (>70%)
-        ("https://bit.ly/xxx", 1),           # должен быть DANGEROUS
+        ("https://google.com", 0),
+        ("https://yandex.ru", 0),
+        ("http://185.130.5.253/login", 1),
+        ("https://bit.ly/xxx", 1),
     ]
     
     for url, true_label in test_cases:
@@ -131,10 +131,9 @@ def main():
         except Exception as e:
             print(f"❌ {url:40s} → ERROR: {e}")
 
-    # === Диагностика: важность признаков (помогает понять, почему модель ошибается) ===
+    # === Диагностика ===
     print("\n🔍 Feature Importances (top 8):")
-    importances = model.feature_importances_
-    for name, imp in sorted(zip(feature_cols, importances), key=lambda x: -x[1])[:8]:
+    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1])[:8]:
         print(f"  {name:15s}: {imp:.3f}")
     
     print(f"\n📊 Features for 'https://google.com':")
@@ -142,13 +141,13 @@ def main():
     for col in feature_cols:
         print(f"  {col:15s}: {feats[col]}")
 
-    # === Сохранение модели ===
+    # === Сохранение ===
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
     model_path = BASE_DIR / 'ml' / 'model.pkl'
     joblib.dump(model, model_path)
     print(f"\n✅ Model saved to {model_path}")
 
-    # === Верификация загрузки ===
+    # === Верификация ===
     test_model = joblib.load(model_path)
     print(f"Verification: loaded model type = {type(test_model).__name__}")
 
