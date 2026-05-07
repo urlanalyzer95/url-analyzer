@@ -42,10 +42,8 @@ cache = {}
 
 # ---------- Вспомогательные функции ----------
 def normalize_url(url):
-    url = url.strip()
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    return url.lower().rstrip('/')
+    url = url.strip().lower().rstrip('/')
+    return url
 
 def is_valid_url(url):
     if not url.startswith(('http://', 'https://')) or ' ' in url:
