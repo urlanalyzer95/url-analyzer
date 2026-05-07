@@ -8,40 +8,40 @@ feature_cols = [
     'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
 ]
 
+# Дефолтные значения на случай пустых/битых URL
+DEFAULT_FEATURES = {col: 0 for col in feature_cols}
+
 def extract_features(url):
-    """
-    Извлекает признаки из URL, СТРОГО соответствуя clean_data.py.
-    """
-    url_str = str(url).lower().strip()
-    features = {}
+    try:
+        url_str = str(url).lower().strip()
+        if not url_str or len(url_str) > 2048:
+            return pd.DataFrame([DEFAULT_FEATURES])[feature_cols]
 
-    # Базовые признаки
-    features['url_length'] = len(url_str)
-    features['num_dots'] = url_str.count('.')
-    features['num_hyphens'] = url_str.count('-')
-    features['num_slashes'] = url_str.count('/')
-    features['num_params'] = len(re.findall(r'[?&]', url_str))
+        parsed = urlparse(url_str)
+        netloc = parsed.netloc.split(':')[0]  # убираем порт, если указан
 
-    # Безопасность
-    # has_ip: наличие IP-адреса (как в clean_data.py)
-    features['has_ip'] = 1 if re.search(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', url_str) else 0
-    # has_https: проверка НАЧАЛА строки на 'https' (БЕЗ ://) — как в clean_data.py
-    features['has_https'] = 1 if url_str.startswith('https') else 0
+        features = {
+            'url_length': len(url_str),
+            'num_dots': url_str.count('.'),
+            'num_hyphens': url_str.count('-'),
+            'num_slashes': url_str.count('/'),
+            'num_params': len(re.findall(r'[?&]', url_str)),
+            # \b гарантирует, что не сработает на строках вида "1.2.3.4" в пути
+            'has_ip': 1 if re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', url_str) else 0,
+            'has_https': 1 if url_str.startswith('https') else 0,
+            'has_login': 1 if 'login' in url_str else 0,
+            'has_verify': 1 if 'verify' in url_str else 0,
+            'has_account': 1 if 'account' in url_str else 0,
+            'has_cp.php': 1 if 'cp.php' in url_str else 0,
+            'has_admin': 1 if 'admin' in url_str else 0,
+            'is_shortened': 1 if any(s in url_str for s in ['bit.ly', 'goo.gl', 'tinyurl']) else 0,
+            'domain_length': len(netloc)
+        }
 
-    # Подозрительные слова
-    features['has_login'] = 1 if 'login' in url_str else 0
-    features['has_verify'] = 1 if 'verify' in url_str else 0
-    features['has_account'] = 1 if 'account' in url_str else 0
-    features['has_cp.php'] = 1 if 'cp.php' in url_str else 0
-    features['has_admin'] = 1 if 'admin' in url_str else 0
+        # Гарантируем точный порядок колонок и подставляем 0, если чего-то не хватает
+        safe_features = {col: features.get(col, 0) for col in feature_cols}
+        return pd.DataFrame([safe_features])[feature_cols]
 
-    # Сервисы сокращения ссылок
-    shorteners = ['bit.ly', 'goo.gl', 'tinyurl']
-    features['is_shortened'] = 1 if any(s in url_str for s in shorteners) else 0
-
-    # Домен: длина netloc (такая же, как в clean_data.py)
-    parsed = urlparse(url_str)
-    domain = parsed.netloc
-    features['domain_length'] = len(domain)   # не заменяем точки!
-
-    return pd.DataFrame([features])[feature_cols]
+    except Exception:
+        # Любой сбой → безопасный дефолт, модель не упадёт
+        return pd.DataFrame([DEFAULT_FEATURES])[feature_cols]
