@@ -8,8 +8,12 @@ import joblib
 import os
 import sys
 from pathlib import Path
-from ml.features import extract_features, feature_cols
+from ml.features import extract_features
 
+feature_cols = [
+    'has_ip', 'has_login', 'has_verify', 'has_account',
+    'has_cp.php', 'has_admin', 'is_shortened', 'has_https'
+]
 
 def main():
     BASE_DIR = Path(__file__).parent
@@ -26,24 +30,20 @@ def main():
 
     safe_urls = [
         'https://google.com', 'https://yandex.ru', 'https://www.bing.com',
-        'https://duckduckgo.com', 'https://www.baidu.com',
-        'https://github.com', 'https://stackoverflow.com', 'https://www.reddit.com',
-        'https://www.twitter.com', 'https://www.instagram.com', 'https://www.linkedin.com',
-        'https://www.facebook.com', 'https://vk.com', 'https://ok.ru', 'https://www.weibo.com',
-        'https://www.youtube.com', 'https://www.netflix.com', 'https://www.spotify.com',
-        'https://www.twitch.tv', 'https://www.imdb.com', 'https://www.bbc.com',
-        'https://edition.cnn.com', 'https://www.nytimes.com', 'https://www.theguardian.com',
-        'https://medium.com', 'https://www.wired.com', 'https://techcrunch.com',
+        'https://duckduckgo.com', 'https://github.com', 'https://stackoverflow.com',
+        'https://www.reddit.com', 'https://www.twitter.com', 'https://www.instagram.com',
+        'https://www.linkedin.com', 'https://www.facebook.com', 'https://vk.com',
+        'https://ok.ru', 'https://www.youtube.com', 'https://www.netflix.com',
+        'https://www.spotify.com', 'https://www.bbc.com', 'https://edition.cnn.com',
+        'https://www.nytimes.com', 'https://medium.com', 'https://techcrunch.com',
         'https://mail.google.com', 'https://outlook.live.com', 'https://mail.yahoo.com',
-        'https://drive.google.com', 'https://www.dropbox.com', 'https://onedrive.live.com',
-        'https://mit.edu', 'https://stanford.edu', 'https://harvard.edu',
-        'https://www.cambridge.org', 'https://www.usa.gov', 'https://www.gov.uk',
-        'https://www.amazon.com', 'https://www.ebay.com', 'https://www.paypal.com',
-        'https://www.adobe.com', 'https://www.office.com', 'https://www.salesforce.com',
-        'https://www.zoom.us', 'https://www.slack.com', 'https://www.telegram.org',
-        'https://www.whatsapp.com', 'https://www.booking.com', 'https://www.airbnb.com',
-        'https://www.ikea.com', 'https://www.wikipedia.org',
-        'https://mail.ru', 'https://dzen.ru', 'https://www.rambler.ru', 'https://www.kp.ru',
+        'https://drive.google.com', 'https://www.dropbox.com', 'https://mit.edu',
+        'https://stanford.edu', 'https://harvard.edu', 'https://www.amazon.com',
+        'https://www.ebay.com', 'https://www.paypal.com', 'https://www.adobe.com',
+        'https://www.office.com', 'https://www.zoom.us', 'https://www.slack.com',
+        'https://www.telegram.org', 'https://www.whatsapp.com', 'https://www.booking.com',
+        'https://www.airbnb.com', 'https://www.wikipedia.org', 'https://mail.ru',
+        'https://dzen.ru',
     ]
     
     for url in safe_urls:
@@ -58,7 +58,6 @@ def main():
         'http://bit.ly/xxx',
         'https://secure-paypal-verify.account-login.cp.php.evil.com',
         'http://goo.gl/malware',
-        'https://login-verify-account-update.cp.php.bad-domain.ru',
     ]
     
     for url in dangerous_urls:
@@ -84,7 +83,7 @@ def main():
     print("\nTraining Random Forest...")
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=10,
+        max_depth=8,
         min_samples_split=20,
         min_samples_leaf=10,
         class_weight='balanced',
@@ -117,7 +116,7 @@ def main():
     for url, true_label in test_cases:
         try:
             feats = extract_features(url)
-            proba = model.predict_proba(feats.values)[0][1] * 100
+            proba = model.predict_proba(feats[feature_cols].values)[0][1] * 100
             pred = 1 if proba >= 70 else 0
             status = "✅" if pred == true_label else "⚠️"
             verdict = "DANGEROUS" if proba >= 70 else ("SUSPICIOUS" if proba >= 40 else "SAFE")
@@ -125,14 +124,9 @@ def main():
         except Exception as e:
             print(f"❌ {url:40s} → ERROR: {e}")
 
-    print("\n🔍 Feature Importances (top 8):")
-    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1])[:8]:
+    print("\n🔍 Feature Importances:")
+    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1]):
         print(f"  {name:15s}: {imp:.3f}")
-    
-    print(f"\n📊 Features for 'https://google.com':")
-    feats = extract_features("https://google.com").iloc[0]
-    for col in feature_cols:
-        print(f"  {col:15s}: {feats[col]}")
 
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
     model_path = BASE_DIR / 'ml' / 'model.pkl'
