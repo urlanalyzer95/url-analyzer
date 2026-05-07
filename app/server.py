@@ -114,25 +114,36 @@ def health():
 
 @app.route('/check', methods=['POST'])
 def check_url():
-    data = request.json or {}
+    data = request.json
     raw_url = data.get('url', '').strip()
-    
     if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
 
-    url = normalize_url(raw_url)
-    if not is_valid_url(url):
-        return jsonify({'error': 'Невалидный URL'}), 400
-
+    # Нормализация: приводим к нижнему регистру, убираем пробелы и слэш в конце
+    url = raw_url.strip().lower().rstrip('/')
+    
+    # Валидация (должна быть схема http:// или https://)
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Невалидный URL. Укажите http:// или https://'}), 400
+    
+    # Проверка кэша
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
 
-    probability = predict(url)
+    # Прямой вызов модели (без explainer)
+    try:
+        features = extract_features(url)   # DataFrame
+        X = features.values.reshape(1, -1)
+        score = model.predict_proba(X)[0][1]   # вероятность фишинга
+    except Exception as e:
+        print(f"Prediction error: {e}", file=sys.stderr)
+        score = 0.5
 
-    if probability >= 0.7:
+    # Пороги (можно настроить под ваши нужды)
+    if score >= 0.85:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif probability >= 0.4:
+    elif score >= 0.5:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
@@ -141,12 +152,12 @@ def check_url():
         'url': raw_url,
         'verdict': verdict,
         'verdict_text': text,
-        'score': round(probability * 100),
-        'explanations': ["ML модель определила уровень опасности на основе признаков URL"]
+        'score': round(score * 100),
+        'explanations': ["ML модель определила уровень опасности"]
     }
     set_cached(url, result)
     return jsonify(result)
-
+    
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
