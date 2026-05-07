@@ -63,8 +63,15 @@ def main():
             pass
 
     df = df.drop_duplicates(subset=feature_cols + ['label'])
-    # ИСПРАВЛЕНИЕ: заполняем пропуски нулями вместо удаления строк
-    df[feature_cols] = df[feature_cols].fillna(0)
+    
+    # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+    # 1. Заполняем пропуски нулями (не удаляем строки!)
+    # 2. Убираем pd.to_numeric с errors='coerce' — он создаёт лишние NaN
+    for col in feature_cols:
+        if col in df.columns and df[col].isna().any():
+            df[col] = df[col].fillna(0)
+    
+    # Удаляем только строки без метки
     df = df.dropna(subset=['label']).reset_index(drop=True)
 
     print(f"\nFinal dataset: {len(df)} examples")
