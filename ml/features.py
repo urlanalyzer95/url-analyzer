@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 # Единый список признаков — порядок ВАЖЕН для совместимости с моделью
 feature_cols = [
     'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
-    'has_ip', 'has_https', 'has_login', 'has_verify', 'has_account',
+    'has_ip', 'has_login', 'has_verify', 'has_account',
     'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
 ]
 
@@ -15,11 +15,6 @@ DEFAULT_FEATURES = {col: 0 for col in feature_cols}
 
 
 def extract_features(url):
-    """
-    Безопасно извлекает признаки из URL.
-    При любой ошибке возвращает DataFrame с нулями (модель не упадёт).
-    Гарантирует строгий порядок столбцов.
-    """
     try:
         url_str = str(url).lower().strip()
         
@@ -38,7 +33,6 @@ def extract_features(url):
             'num_params': len(re.findall(r'[?&]', url_str)),
             # \b гарантирует, что не сработает на "1.2.3.4" в пути
             'has_ip': 1 if re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', url_str) else 0,
-            'has_https': 1 if url_str.startswith('https') else 0,
             'has_login': 1 if 'login' in url_str else 0,
             'has_verify': 1 if 'verify' in url_str else 0,
             'has_account': 1 if 'account' in url_str else 0,
