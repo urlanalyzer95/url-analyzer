@@ -41,10 +41,15 @@ def main():
         'https://dzen.ru',
     ]
     
+    if 'url' in df.columns:
+        for url in safe_urls:
+            df = df[df['url'] != url]
+    
+    new_rows = []
     for url in safe_urls:
         try:
             feats = extract_features(url).iloc[0].to_dict()
-            df = pd.concat([df, pd.DataFrame([{**feats, 'label': 0}])], ignore_index=True)
+            new_rows.append({**feats, 'label': 0})
         except Exception:
             pass
     
@@ -58,20 +63,20 @@ def main():
     for url in dangerous_urls:
         try:
             feats = extract_features(url).iloc[0].to_dict()
-            df = pd.concat([df, pd.DataFrame([{**feats, 'label': 1}])], ignore_index=True)
+            new_rows.append({**feats, 'label': 1})
         except Exception:
             pass
 
+    if new_rows:
+        df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+        print(f"Added {len(new_rows)} extra URLs")
+
     df = df.drop_duplicates(subset=feature_cols + ['label'])
     
-    # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
-    # 1. Заполняем пропуски нулями (не удаляем строки!)
-    # 2. Убираем pd.to_numeric с errors='coerce' — он создаёт лишние NaN
     for col in feature_cols:
         if col in df.columns and df[col].isna().any():
             df[col] = df[col].fillna(0)
     
-    # Удаляем только строки без метки
     df = df.dropna(subset=['label']).reset_index(drop=True)
 
     print(f"\nFinal dataset: {len(df)} examples")
@@ -138,7 +143,6 @@ def main():
 
     test_model = joblib.load(model_path)
     print(f"Verification: loaded model type = {type(test_model).__name__}")
-
 
 if __name__ == '__main__':
     main()
