@@ -26,23 +26,41 @@ def main():
     print(f"Shape: {df.shape}")
     print(f"Classes 0(legit)/1(phishing):\n{df['label'].value_counts()}")
 
-    # === КРИТИЧНО: Только ЧИСТЫЕ легитимные домены, БЕЗ /login, /account и т.п. ===
+    # === КРИТИЧНО: Только ЧИСТЫЕ домены, БЕЗ /login, /account, /verify и т.п. ===
     # Любое подозрительное слово в легитимном URL создаёт конфликт с фишинговым датасетом
     safe_urls = [
-        'https://google.com', 'https://yandex.ru', 'https://www.microsoft.com',
-        'https://www.apple.com', 'https://www.amazon.com', 'https://www.wikipedia.org',
-        'https://github.com', 'https://stackoverflow.com', 'https://www.youtube.com',
-        'https://www.netflix.com', 'https://www.paypal.com', 'https://mail.google.com',
-        'https://outlook.live.com', 'https://www.bbc.com', 'https://edition.cnn.com',
-        'https://www.nytimes.com', 'https://medium.com', 'https://techcrunch.com',
-        'https://vk.com', 'https://ok.ru', 'https://mail.ru', 'https://dzen.ru',
+        # Поисковики / порталы
+        'https://google.com', 'https://yandex.ru', 'https://www.bing.com',
+        'https://duckduckgo.com', 'https://www.baidu.com',
+        
+        # Соцсети (только корневые домены)
+        'https://github.com', 'https://stackoverflow.com', 'https://www.reddit.com',
+        'https://www.twitter.com', 'https://www.instagram.com', 'https://www.linkedin.com',
+        'https://www.facebook.com', 'https://vk.com', 'https://ok.ru', 'https://www.weibo.com',
+        
+        # Медиа / новости
+        'https://www.youtube.com', 'https://www.netflix.com', 'https://www.spotify.com',
+        'https://www.twitch.tv', 'https://www.imdb.com', 'https://www.bbc.com',
+        'https://edition.cnn.com', 'https://www.nytimes.com', 'https://www.theguardian.com',
+        'https://medium.com', 'https://www.wired.com', 'https://techcrunch.com',
+        
+        # Почта / облака (корневые)
+        'https://mail.google.com', 'https://outlook.live.com', 'https://mail.yahoo.com',
+        'https://drive.google.com', 'https://www.dropbox.com', 'https://onedrive.live.com',
+        
+        # Университеты / гос. сайты
         'https://mit.edu', 'https://stanford.edu', 'https://harvard.edu',
-        'https://www.ebay.com', 'https://www.adobe.com', 'https://www.zoom.us',
-        'https://www.slack.com', 'https://www.telegram.org', 'https://www.booking.com',
-        'https://www.airbnb.com', 'https://www.ikea.com', 'https://www.salesforce.com',
-        'https://www.office.com', 'https://www.coursera.org', 'https://www.edx.org',
-        'https://www.reddit.com', 'https://www.twitter.com', 'https://www.instagram.com',
-        'https://www.linkedin.com', 'https://www.facebook.com', 'https://www.whatsapp.com',
+        'https://www.cambridge.org', 'https://www.usa.gov', 'https://www.gov.uk',
+        
+        # E-commerce / сервисы
+        'https://www.amazon.com', 'https://www.ebay.com', 'https://www.paypal.com',
+        'https://www.adobe.com', 'https://www.office.com', 'https://www.salesforce.com',
+        'https://www.zoom.us', 'https://www.slack.com', 'https://www.telegram.org',
+        'https://www.whatsapp.com', 'https://www.booking.com', 'https://www.airbnb.com',
+        'https://www.ikea.com', 'https://www.wikipedia.org',
+        
+        # Российские сервисы
+        'https://mail.ru', 'https://dzen.ru', 'https://www.rambler.ru', 'https://www.kp.ru',
     ]
     
     for url in safe_urls:
@@ -87,9 +105,9 @@ def main():
     print("\nTraining Random Forest...")
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=12,              # чуть меньше — защита от переобучения
-        min_samples_split=20,      # больше — устойчивее к шуму
-        min_samples_leaf=10,       # больше — сглаживает редкие комбинации
+        max_depth=10,              # МЕНЬШЕ = лучше обобщение
+        min_samples_split=20,      # БОЛЬШЕ = устойчивее к шуму
+        min_samples_leaf=10,       # БОЛЬШЕ = сглаживает редкие комбинации
         class_weight='balanced',   # КРИТИЧНО: делает вероятности адекватными
         random_state=42,
         n_jobs=-1
