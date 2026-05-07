@@ -11,9 +11,8 @@ from pathlib import Path
 from ml.features import extract_features
 
 feature_cols = [
-    'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
     'has_ip', 'has_login', 'has_verify', 'has_account',
-    'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
+    'has_cp.php', 'has_admin', 'is_shortened'
 ]
 
 def main():
@@ -69,7 +68,6 @@ def main():
             pass
 
     df = df.drop_duplicates(subset=feature_cols + ['label'])
-    # ВАЖНО: заполняем пропуски нулями, а не удаляем строки
     df[feature_cols] = df[feature_cols].fillna(0)
     df = df.dropna(subset=['label']).reset_index(drop=True)
 
@@ -85,7 +83,7 @@ def main():
     print("\nTraining Random Forest...")
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=10,
+        max_depth=8,
         min_samples_split=20,
         min_samples_leaf=10,
         class_weight='balanced',
@@ -126,8 +124,8 @@ def main():
         except Exception as e:
             print(f"❌ {url:40s} → ERROR: {e}")
 
-    print("\n🔍 Feature Importances (top 8):")
-    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1])[:8]:
+    print("\n🔍 Feature Importances:")
+    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1]):
         print(f"  {name:15s}: {imp:.3f}")
 
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
