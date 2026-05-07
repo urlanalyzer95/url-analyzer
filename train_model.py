@@ -63,7 +63,7 @@ def main():
             pass
 
     df = df.drop_duplicates(subset=feature_cols + ['label'])
-    # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: заполняем пропуски вместо удаления строк
+    # ИСПРАВЛЕНИЕ: заполняем пропуски нулями вместо удаления строк
     df[feature_cols] = df[feature_cols].fillna(0)
     df = df.dropna(subset=['label']).reset_index(drop=True)
 
