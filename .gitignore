@@ -1,10 +1,31 @@
-data/*.csv
-ml/*.pkl
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+*.egg
+
+# ML artifacts
+ml/*.pkl
+ml/*.joblib
+data/*.db
+data/processed/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs & temp
 *.log
-.env
-Dockerfile.*
-ml/*.pkl 
-data/*.db 
+tmp/
+temp/
+
+# OS
+.DS_Store
+Thumbs.db
