@@ -50,9 +50,9 @@ def export_all_feedback():
     if not df.empty:
         df.to_csv(OUTPUT_DIR / 'feedback_export.csv', index=False)
         df.to_json(OUTPUT_DIR / 'feedback_export.json', orient='records', indent=2)
-        print(f"   ✅ Экспортировано {len(df)} отзывов")
+        print(f"Экспортировано {len(df)} отзывов")
     else:
-        print("   ⚠️ Нет отзывов для экспорта")
+        print("Нет отзывов для экспорта")
     
     return df
 
@@ -70,9 +70,9 @@ def export_misclassified():
     
     if not df.empty:
         df.to_csv(OUTPUT_DIR / 'misclassified_urls.csv', index=False)
-        print(f"   ✅ Найдено {len(df)} ошибочных предсказаний")
+        print(f"Найдено {len(df)} ошибочных предсказаний")
     else:
-        print("   ⚠️ Нет ошибочных предсказаний")
+        print("Нет ошибочных предсказаний")
     
     return df
 
@@ -89,7 +89,7 @@ def export_new_examples():
     conn.close()
     
     if df.empty:
-        print("   ⚠️ Нет новых примеров для обучения")
+        print("Нет новых примеров для обучения")
         return pd.DataFrame()
     
     # Конвертируем вердикты в числа для ML
@@ -105,14 +105,14 @@ def export_new_examples():
     # Сохраняем только нужные колонки
     result = df[['url', 'label']]
     result.to_csv(OUTPUT_DIR / 'new_training_examples.csv', index=False)
-    print(f"   ✅ Найдено {len(result)} новых примеров для обучения")
+    print(f"Найдено {len(result)} новых примеров для обучения")
     
     return result
 
 
 def clear_database():
     """Полностью очищает БД (удаляет все записи)"""
-    print("\n🧹 ОЧИСТКА БАЗЫ ДАННЫХ")
+    print("\nОЧИСТКА БАЗЫ ДАННЫХ")
     
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -130,24 +130,22 @@ def clear_database():
     conn.commit()
     conn.close()
     
-    print(f"   ✅ Удалено записей: {before}")
+    print(f"Удалено записей: {before}")
     
     # Оптимизируем БД
     if before > 0:
         conn = sqlite3.connect(DB_PATH)
         conn.execute('VACUUM')
         conn.close()
-        print(f"   ✅ БД оптимизирована")
+        print(f"БД оптимизирована")
 
 
 # ОСНОВНОЙ ЗАПУСК 
 if __name__ == '__main__':
-    print("\n" + "="*50)
-    print("📊 ЭКСПОРТ ОТЗЫВОВ ИЗ БД")
-    print("="*50)
+    print("ЭКСПОРТ ОТЗЫВОВ ИЗ БД")
     
     # 1. Статистика
-    print("\n📈 СТАТИСТИКА:")
+    print("\nСТАТИСТИКА:")
     stats = get_stats()
     for key, value in stats.items():
         if key != 'verdict_distribution':
@@ -157,26 +155,24 @@ if __name__ == '__main__':
         print(f"   verdict_distribution: {stats['verdict_distribution']}")
     
     # 2. Экспорт всех отзывов
-    print("\n📥 ЭКСПОРТ ВСЕХ ОТЗЫВОВ:")
+    print("\nЭКСПОРТ ВСЕХ ОТЗЫВОВ:")
     export_all_feedback()
     
     # 3. Экспорт ошибочных предсказаний
-    print("\n❌ ЭКСПОРТ ОШИБОЧНЫХ ПРЕДСКАЗАНИЙ:")
+    print("\nЭКСПОРТ ОШИБОЧНЫХ ПРЕДСКАЗАНИЙ:")
     export_misclassified()
     
     # 4. Экспорт новых примеров для обучения
-    print("\n🎓 ЭКСПОРТ ДЛЯ ОБУЧЕНИЯ:")
+    print("\nЭКСПОРТ ДЛЯ ОБУЧЕНИЯ:")
     export_new_examples()
     
     # 5. ОЧИСТКА БД
     clear_database()
     
-    print("\n" + "="*50)
-    print("✅ ЭКСПОРТ ЗАВЕРШЁН!")
-    print("="*50)
-    print("\n📁 Созданные файлы:")
+    print("ЭКСПОРТ ЗАВЕРШЁН!")
+    print("\nСозданные файлы:")
     print("   • data/feedback_export.csv - все отзывы")
     print("   • data/feedback_export.json - все отзывы (JSON)")
     print("   • data/misclassified_urls.csv - ошибки модели")
     print("   • data/new_training_examples.csv - для дообучения")
-    print("\n🗑️ БД полностью очищена, готова к новым отзывам!")
+    print("\nБД полностью очищена, готова к новым отзывам!")

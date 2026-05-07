@@ -11,29 +11,27 @@ NEW_EXAMPLES = 'data/new_training_examples.csv'
 
 
 def update_dataset():
-    print("\n" + "="*50)
-    print("✅ ДОБАВЛЕНИЕ НОВЫХ ОТЗЫВОВ В ДАТАСЕТ")
-    print("="*50)
+    print("ДОБАВЛЕНИЕ НОВЫХ ОТЗЫВОВ В ДАТАСЕТ")
     
     # 1. Загружаем новые отзывы
     if not Path(NEW_EXAMPLES).exists():
-        print("⚠️ Нет новых отзывов для добавления")
+        print("Нет новых отзывов для добавления")
         return
     
     new_df = pd.read_csv(NEW_EXAMPLES)
-    print(f"📁 Новых отзывов: {len(new_df)}")
+    print(f"Новых отзывов: {len(new_df)}")
     
     # 2. Загружаем существующий датасет
     if not Path(DATASET_FILE).exists():
-        print(f"❌ Датасет не найден: {DATASET_FILE}")
+        print(f"Датасет не найден: {DATASET_FILE}")
         return
     
     current_df = pd.read_csv(DATASET_FILE)
     current_count = len(current_df)
-    print(f"📁 Текущий датасет: {current_count} записей")
+    print(f"Текущий датасет: {current_count} записей")
     
     # 3. Извлекаем признаки для новых URL
-    print("\n⚙️ Извлечение признаков...")
+    print("\nИзвлечение признаков...")
     
     all_features = []
     for idx, row in new_df.iterrows():
@@ -59,14 +57,14 @@ def update_dataset():
     # 6. Сохраняем
     updated_df.to_csv(DATASET_FILE, index=False)
     
-    print(f"\n✅ ДАТАСЕТ ОБНОВЛЁН:")
+    print(f"\nДАТАСЕТ ОБНОВЛЁН:")
     print(f"   Было: {current_count}")
     print(f"   Добавлено: {len(new_df)}")
     print(f"   Стало: {len(updated_df)}")
     
     # 7. Удаляем CSV с отзывами
     Path(NEW_EXAMPLES).unlink()
-    print(f"\n🗑️ Удалён {NEW_EXAMPLES}")
+    print(f"\nУдалён {NEW_EXAMPLES}")
 
 
 if __name__ == '__main__':

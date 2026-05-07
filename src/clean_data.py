@@ -71,7 +71,7 @@ def balance_classes(df, label_col='label', random_state=42):
     if len(counts) < 2:
         return df
     
-    print(f"   До балансировки: {counts.to_dict()}")
+    print(f"До балансировки: {counts.to_dict()}")
     
     min_count = counts.min()
     df_balanced = pd.concat([
@@ -79,7 +79,7 @@ def balance_classes(df, label_col='label', random_state=42):
         for cls in df[label_col].unique()
     ], ignore_index=True)
     
-    print(f"   После балансировки: {len(df_balanced):,} строк")
+    print(f"После балансировки: {len(df_balanced):,} строк")
     return df_balanced
 
 # Извлечение признаков 
