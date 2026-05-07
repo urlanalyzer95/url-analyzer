@@ -8,12 +8,7 @@ import joblib
 import os
 import sys
 from pathlib import Path
-from ml.features import extract_features
-
-feature_cols = [
-    'has_ip', 'has_login', 'has_verify', 'has_account',
-    'has_cp.php', 'has_admin', 'is_shortened'
-]
+from ml.features import extract_features, feature_cols
 
 def main():
     BASE_DIR = Path(__file__).parent
@@ -83,7 +78,7 @@ def main():
     print("\nTraining Random Forest...")
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=8,
+        max_depth=10,
         min_samples_split=20,
         min_samples_leaf=10,
         class_weight='balanced',
@@ -97,7 +92,7 @@ def main():
     accuracy = accuracy_score(y_test, y_pred)
     print(f"\nACCURACY: {accuracy:.4f} ({accuracy*100:.2f}%)")
     print("\nClassification Report:")
-    print(classification_report(y_test, y_pred, target_names=['Legitimate', 'Phishing']))
+    print(classification_report(y_test, y_pred, target_names=['Legitimate', 'Phishing'], zero_division=0))
 
     sample_size = min(1000, len(X_test))
     start_time = time.perf_counter()
@@ -124,8 +119,8 @@ def main():
         except Exception as e:
             print(f"❌ {url:40s} → ERROR: {e}")
 
-    print("\n🔍 Feature Importances:")
-    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1]):
+    print("\n🔍 Feature Importances (top 8):")
+    for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1])[:8]:
         print(f"  {name:15s}: {imp:.3f}")
 
     os.makedirs(BASE_DIR / 'ml', exist_ok=True)
