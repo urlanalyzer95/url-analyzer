@@ -6,33 +6,33 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
 
-# Правильные пути
-BASE_DIR = Path(__file__).parent.parent  
+# Пути
+BASE_DIR = Path(__file__).parent.parent
 raw_folder = BASE_DIR / 'data' / 'raw'
 processed_folder = BASE_DIR / 'data' / 'processed'
 
-# Создаём папки, если их нет
 os.makedirs(raw_folder, exist_ok=True)
 os.makedirs(processed_folder, exist_ok=True)
 
-
 def clean_url_dataset(df):
-    # 1. Удалить дубликаты по URL
+    """Очистка датасета: удаление дубликатов по URL, валидация"""
     url_col = 'url' if 'url' in df.columns else 'URL'
-    if url_col in df.columns:
-        df = df.drop_duplicates(subset=[url_col])
     
-    # 2. Удалить строки с пустыми значениями
+    # 1. Удаляем дубликаты по URL
+    if url_col in df.columns:
+        before = len(df)
+        df = df.drop_duplicates(subset=[url_col])
+        print(f"   Удалено дубликатов по URL: {before - len(df)}")
+    
+    # 2. Удаляем пустые строки
     df = df.dropna()
     
-    # 3. Проверить корректность URL + очистка
+    # 3. Валидация URL
     if url_col in df.columns:
-        # Очистка пробелов и нижний регистр
         df[url_col] = df[url_col].astype(str).str.strip().str.lower()
         df = df[df[url_col] != '']
         df = df[df[url_col] != 'nan']
         
-        # Валидация через urlparse 
         def is_valid_url(url):
             try:
                 parsed = urlparse(url)
@@ -42,13 +42,12 @@ def clean_url_dataset(df):
         
         df = df[df[url_col].apply(is_valid_url)]
     
-    # 4. Унифицировать названия колонок + конвертация меток
+    # 4. Унификация колонок и меток
     df = df.rename(columns={
         'URL': 'url', 'Url': 'url',
         'type': 'label', 'class': 'label', 'classification': 'label'
     })
     
-    # Конвертация меток в числа
     if 'label' in df.columns:
         df['label'] = df['label'].astype(str).str.lower().str.strip()
         label_map = {
@@ -61,31 +60,8 @@ def clean_url_dataset(df):
     
     return df
 
-# Балансировка классов 
-
-def balance_classes(df, label_col='label', random_state=42):
-    if label_col not in df.columns:
-        return df
-    
-    counts = df[label_col].value_counts()
-    if len(counts) < 2:
-        return df
-    
-    print(f"До балансировки: {counts.to_dict()}")
-    
-    min_count = counts.min()
-    df_balanced = pd.concat([
-        df[df[label_col] == cls].sample(min_count, random_state=random_state)
-        for cls in df[label_col].unique()
-    ], ignore_index=True)
-    
-    print(f"После балансировки: {len(df_balanced):,} строк")
-    return df_balanced
-
-# Извлечение признаков 
-
 def extract_features(df, url_col='url'):
-    """Превращает URL в числовые признаки для ML"""
+    """Извлечение признаков из URL"""
     if url_col not in df.columns:
         return df
     
@@ -115,25 +91,42 @@ def extract_features(df, url_col='url'):
         'bit.ly|goo.gl|tinyurl', case=False, na=False
     ).astype(int)
     
-    # Структура
+    # Домен
     features['domain_length'] = df[url_col].apply(
         lambda x: len(urlparse(str(x)).netloc)
     )
     
-    # Целевая переменная и URL
+    # URL и label
     if 'label' in df.columns:
         features['label'] = df['label']
     features['url'] = df[url_col]
     
     return features
 
-# Сохранение с метаданными
+def balance_classes(df, label_col='label', random_state=42):
+    """Балансировка классов"""
+    if label_col not in df.columns:
+        return df
+    
+    counts = df[label_col].value_counts()
+    if len(counts) < 2:
+        return df
+    
+    print(f"   До балансировки: {counts.to_dict()}")
+    
+    min_count = counts.min()
+    df_balanced = pd.concat([
+        df[df[label_col] == cls].sample(min_count, random_state=random_state)
+        for cls in df[label_col].unique()
+    ], ignore_index=True)
+    
+    print(f"   После балансировки: {len(df_balanced):,} строк")
+    return df_balanced
 
 def save_with_metadata(df_features, output_path, original_name):
-    # Сохраняем CSV
+    """Сохранение с метаданными"""
     df_features.to_csv(output_path, index=False, encoding='utf-8')
     
-    # Сохраняем метаданные 
     metadata = {
         'source_file': original_name,
         'feature_columns': [c for c in df_features.columns if c not in ['url', 'label']],
@@ -147,13 +140,10 @@ def save_with_metadata(df_features, output_path, original_name):
     
     print(f"   Сохранено: {Path(output_path).name}")
 
-
 # ОСНОВНОЙ ЦИКЛ
-
 if __name__ == '__main__':
     print("Обработка датасетов URL-ANALYZER\n")
     
-    # Ищем CSV файлы
     csv_files = list(Path(raw_folder).glob('*.csv'))
     print(f"Найдено файлов: {len(csv_files)}\n")
     
@@ -165,32 +155,44 @@ if __name__ == '__main__':
         print(f"{file_path.name}")
         
         try:
-            # Загрузка
+            # 1. Загрузка
             df = pd.read_csv(file_path, encoding='utf-8', on_bad_lines='skip')
             print(f"   Загружено: {len(df):,} строк")
             
-            # Очистка
+            # 2. Очистка (удаляет дубликаты по URL)
             df_clean = clean_url_dataset(df)
             print(f"   После очистки: {len(df_clean):,} строк")
             
-            # Балансировка
-            df_clean = balance_classes(df_clean)
-            
-            # Признаки
+            # ✅ 3. ИЗВЛЕЧЕНИЕ ПРИЗНАКОВ (ПЕРЕНОСИМ СЮДА!)
             df_features = extract_features(df_clean)
+            print(f"   Извлечено признаков: {len(df_features.columns)}")
             
-            # Сохранение
-            output_path = Path(processed_folder) / f"{file_path.stem}_features.csv"
-            save_with_metadata(df_features, output_path, file_path.name)
+            # ✅ 4. УДАЛЕНИЕ ДУБЛИКАТОВ ПО ПРИЗНАКАМ (ПЕРЕД БАЛАНСИРОВКОЙ!)
+            feature_cols_only = [col for col in df_features.columns if col not in ['url', 'label']]
+            before = len(df_features)
+            df_features = df_features.drop_duplicates(subset=feature_cols_only, keep='first')
+            after = len(df_features)
+            print(f"\n   🗑️ Удалено дубликатов по признакам: {before - after:,} ({(before-after)/before*100:.1f}%)")
+            print(f"   Итого уникальных комбинаций признаков: {after:,}")
+            
+            # ✅ 5. БАЛАНСИРОВКА (ПОСЛЕ удаления дубликатов!)
+            df_balanced = balance_classes(df_features)
+            
+            # 6. Сохранение
+            output_path = Path(processed_folder) / f"{file_path.stem}_features4.csv"
+            save_with_metadata(df_balanced, output_path, file_path.name)
             
             # Статистика
-            if 'label' in df_clean.columns:
-                dist = df_clean['label'].value_counts().to_dict()
-                print(f"   Классы: 0={dist.get(0,0):,}, 1={dist.get(1,0):,}")
+            if 'label' in df_balanced.columns:
+                dist = df_balanced['label'].value_counts().to_dict()
+                print(f"\n   📊 Классы: 0={dist.get(0,0):,}, 1={dist.get(1,0):,}")
+                print(f"   📈 Баланс: {dist.get(0,0)/dist.get(1,1):.2f}:1")
             
             print()
             
         except Exception as e:
-            print(f"   Ошибка: {e}")
+            print(f"   ❌ Ошибка: {e}")
+            import traceback
+            traceback.print_exc()
     
     print("Готово! Результаты в data/processed/")
