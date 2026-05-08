@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 feature_cols = [
     'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
-    'has_ip', 'has_https', 'has_login', 'has_verify', 'has_account',
+    'has_ip', 'has_login', 'has_verify', 'has_account',
     'has_cp.php', 'has_admin', 'is_shortened', 'domain_length'
 ]
 
@@ -21,7 +21,7 @@ def extract_features(url):
 
     # Безопасность
     features['has_ip'] = 1 if re.search(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', url_str) else 0
-    features['has_https'] = 1 if url_str.startswith('https') else 0
+    #features['has_https'] = 1 if url_str.startswith('https') else 0
 
     # Подозрительные слова
     features['has_login'] = 1 if 'login' in url_str else 0
