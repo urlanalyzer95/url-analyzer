@@ -1,5 +1,5 @@
 {
-  "source_file": "url_dataset.csv",
+  "source_file": "url_dataset2.csv",
   "feature_columns": [
     "url_length",
     "num_dots",
@@ -20,6 +20,6 @@
     "legitimate": 0,
     "phishing": 1
   },
-  "total_samples": 208868,
-  "generated_at": "2026-04-13T18:36:49.554091"
+  "total_samples": 95674,
+  "generated_at": "2026-05-08T16:08:04.038893"
 }
