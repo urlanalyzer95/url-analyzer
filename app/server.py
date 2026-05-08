@@ -1,4 +1,3 @@
-# server.py
 import sys
 import os
 import re
@@ -6,16 +5,16 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
 import math
-
 import pandas as pd
 import joblib
+import numpy as np
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from ml.features import extract_features
+from ml.features import extract_features, feature_cols
+from ml.explain_model import ModelExplainer
 
-# === Инициализация Flask и auth ===
 app = Flask(__name__, template_folder='templates')
 auth = HTTPBasicAuth()
 cache = {}
@@ -29,7 +28,7 @@ def verify_password(username, password):
         return username
     return None
 
-# === Подключение БД ===
+# Подключение БД
 try:
     from db import init_db, save_feedback, get_all_feedbacks, get_db_path
 except ImportError:
@@ -41,29 +40,34 @@ except ImportError:
         def get_all_feedbacks(): return pd.DataFrame()
         def get_db_path(): return 'data/feedback.db'
 
-# === Глобальные переменные ===
 model = None
+explainer = None
 BASE_DIR = Path(__file__).parent
 
-# === Загрузка модели ===
 def load_model():
-    global model
+    global model, explainer
     try:
-        model_path = BASE_DIR / 'ml' / 'model.pkl'
+        base = Path(__file__).parent.parent
+        model_path = base / 'ml' / 'model.pkl'
         if model_path.exists():
             model = joblib.load(model_path)
-            # Тест на загрузке
+            explainer = ModelExplainer(model_path=str(model_path))
+            # Тестовое предсказание
             test_feats = extract_features('https://google.com')
-            prob = model.predict_proba(test_feats.values.reshape(1, -1))[0][1]
+            prob = model.predict_proba(test_feats[feature_cols].values.reshape(1, -1))[0][1]
             print(f"[DEBUG] google.com probability: {prob:.3f}", file=sys.stderr)
             print(f"✅ Модель загружена: {model_path}", file=sys.stderr)
             return True
+        else:
+            print(f"⚠️ Модель не найдена: {model_path}", file=sys.stderr)
     except Exception as e:
         print(f"⚠️ Ошибка загрузки модели: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
     model = None
+    explainer = None
     return False
 
-# === Вспомогательные функции ===
 def normalize_url(url):
     return url.strip().lower().rstrip('/')
 
@@ -87,19 +91,6 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-def predict(url):
-    """Возвращает вероятность фишинга (0.0 - 1.0)"""
-    if model is None:
-        return 0.5
-    try:
-        features = extract_features(url)
-        X = features.values.reshape(1, -1)
-        return float(model.predict_proba(X)[0][1])
-    except Exception as e:
-        print(f"ML ошибка: {e}", file=sys.stderr)
-        return 0.5
-
-# === Эндпоинты ===
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -109,41 +100,41 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v2.1_stable'
+        'model_version': 'v2.2_explainable'
     })
 
 @app.route('/check', methods=['POST'])
 def check_url():
-    data = request.json
+    data = request.json or {}
     raw_url = data.get('url', '').strip()
     if not raw_url:
         return jsonify({'error': 'URL не указан'}), 400
 
-    # Нормализация: приводим к нижнему регистру, убираем пробелы и слэш в конце
-    url = raw_url.strip().lower().rstrip('/')
-    
-    # Валидация (должна быть схема http:// или https://)
-    if not url.startswith(('http://', 'https://')):
-        return jsonify({'error': 'Невалидный URL. Укажите http:// или https://'}), 400
-    
-    # Проверка кэша
+    url = normalize_url(raw_url)
+    if not is_valid_url(url):
+        return jsonify({'error': 'Невалидный URL'}), 400
+
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
 
-    # Прямой вызов модели (без explainer)
-    try:
-        features = extract_features(url)   # DataFrame
-        X = features.values.reshape(1, -1)
-        score = model.predict_proba(X)[0][1]   # вероятность фишинга
-    except Exception as e:
-        print(f"Prediction error: {e}", file=sys.stderr)
-        score = 0.5
+    if explainer is None:
+        # fallback: просто вероятность
+        try:
+            feats = extract_features(url)
+            X = feats[feature_cols].values.reshape(1, -1)
+            probability = model.predict_proba(X)[0][1]
+        except:
+            probability = 0.5
+        reasons = ["ML модель определила уровень опасности на основе признаков URL"]
+    else:
+        explanation = explainer.predict_with_explanation(url)
+        probability = explanation['probability'] / 100.0
+        reasons = explanation['reasons']
 
-    # Пороги (можно настроить под ваши нужды)
-    if score >= 0.85:
+    if probability >= 0.7:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif score >= 0.5:
+    elif probability >= 0.4:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
@@ -152,12 +143,12 @@ def check_url():
         'url': raw_url,
         'verdict': verdict,
         'verdict_text': text,
-        'score': round(score * 100),
-        'explanations': ["ML модель определила уровень опасности"]
+        'score': round(probability * 100),
+        'explanations': reasons
     }
     set_cached(url, result)
     return jsonify(result)
-    
+
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
@@ -240,7 +231,6 @@ def download_db():
     except Exception as e:
         return f"❌ Ошибка: {e}", 500
 
-# === Запуск ===
 if __name__ == '__main__':
     init_db()
     load_model()
