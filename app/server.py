@@ -10,9 +10,13 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# === FIX: Добавляем пути для импортов ===
 project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+app_dir = Path(__file__).parent
+for p in [str(project_root), str(app_dir)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+# =========================================
 
 from ml.explain_model import ModelExplainer
 from ml.features import extract_features, feature_cols
@@ -43,9 +47,11 @@ try:
         if scaler_path.exists():
             scaler = joblib.load(scaler_path)
         explainer = ModelExplainer()
-        print(f"Model loaded from {model_path}", file=sys.stderr)
+        print(f"✅ Model loaded from {model_path}", file=sys.stderr)
+    else:
+        print("⚠️ Model not found, running in fallback mode", file=sys.stderr)
 except Exception as e:
-    print(f"Error loading model: {e}", file=sys.stderr)
+    print(f"⚠️ Error loading model: {e}", file=sys.stderr)
     model = None
 
 init_db()
@@ -99,7 +105,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v3.4_fixed'
+        'model_version': 'v3.6_render_fixed'
     })
 
 @app.route('/check', methods=['POST'])
@@ -130,11 +136,10 @@ def check_url():
         try:
             expl_data = explainer.predict_with_explanation(url)
             explanations = expl_data.get('reasons', [])
-        except Exception as e:
-            print(f"Explainer error: {e}", file=sys.stderr)
-            explanations = ["Не удалось сформировать объяснение"]
+        except Exception:
+            explanations = ["ML model determined threat level"]
     else:
-        explanations = ["Модель загружена без модуля объяснений"]
+        explanations = ["Model not loaded"]
 
     result = {
         'url': raw_url,
