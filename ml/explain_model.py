@@ -1,8 +1,10 @@
-# ml/explain_model.py
 import joblib
 import numpy as np
 import pandas as pd
+import logging
 from ml.features import extract_features, feature_cols
+
+logger = logging.getLogger(__name__)
 
 class ModelExplainer:
     def __init__(self, model_path='ml/model.pkl'):
@@ -13,7 +15,6 @@ class ModelExplainer:
         if hasattr(self.model, 'feature_importances_'):
             self.global_importance = self.model.feature_importances_
         else:
-            # Для CalibratedClassifierCV берём важность базовой модели
             base = getattr(self.model, 'base_estimator', None)
             if base and hasattr(base, 'feature_importances_'):
                 self.global_importance = base.feature_importances_
@@ -37,10 +38,21 @@ class ModelExplainer:
             'domain_length': 'Длина домена'
         }
         
-        # Загрузка средних значений (опционально)
+        # Загрузка средних значений
+        self.means = None
         try:
-            self.means = joblib.load('ml/feature_means.pkl')
+            means_data = joblib.load('ml/feature_means.pkl')
+            # means_data может быть словарём {feature_name: mean} или массивом
+            if isinstance(means_data, dict):
+                self.means = [means_data.get(name, 0) for name in self.feature_names]
+            else:
+                self.means = means_data  # массив
+            logger.info("Средние значения признаков загружены")
         except FileNotFoundError:
+            logger.warning("Файл ml/feature_means.pkl не найден. Объяснения без сравнения со средними будут неполными.")
+            self.means = None
+        except Exception as e:
+            logger.error(f"Ошибка загрузки средних значений: {e}")
             self.means = None
 
     def predict_with_explanation(self, url):
@@ -70,7 +82,7 @@ class ModelExplainer:
                 elif self.means is not None and not name.startswith('has_'):
                     mean_val = self.means[i] if i < len(self.means) else 0
                     if mean_val > 0 and value > mean_val * 1.5:
-                        reasons.append(f"📈 {comment} (значение {value})")
+                        reasons.append(f"📈 {comment} (значение {value} превышает среднее {mean_val:.1f})")
             
             if not reasons:
                 reasons.append("URL содержит комбинацию признаков, типичных для фишинга")
