@@ -1,46 +1,55 @@
 import sys
 import os
-import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
 import math
-
 import pandas as pd
 import joblib
 from flask import Flask, render_template, request, jsonify, send_file
-from ml.explain_model import ModelExplainer
-# после других импортов
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-auth = HTTPBasicAuth()
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
+from ml.explain_model import ModelExplainer
+from ml.features import extract_features, feature_cols
+from db import init_db, save_feedback, get_all_feedbacks, get_db_path
+
+auth = HTTPBasicAuth()
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'default_secret_change_me')
-users = {
-    "admin": generate_password_hash(ADMIN_PASSWORD)
-}
+users = {"admin": generate_password_hash(ADMIN_PASSWORD)}
 
 @auth.verify_password
 def verify_password(username, password):
     if username in users and check_password_hash(users.get(username), password):
         return username
     return None
-    
-explainer = ModelExplainer()
-# ---- Подключение модуля работы с БД (feedback.db) ----
-try:
-    from db import init_db, save_feedback, get_all_feedbacks, get_db_path
-except ImportError:
-    from app.db import init_db, save_feedback, get_all_feedbacks, get_db_path
-
-# Функция извлечения признаков из URL (определена в ml/features.py)
-from ml.features import extract_features
 
 app = Flask(__name__, template_folder='templates')
 cache = {}
+model = None
+scaler = None
+explainer = None
+BASE_DIR = Path(__file__).parent.parent
 
-# ---------- Вспомогательные функции ----------
+try:
+    model_path = BASE_DIR / 'ml' / 'model.pkl'
+    scaler_path = BASE_DIR / 'ml' / 'scaler.pkl'
+    if model_path.exists():
+        model = joblib.load(model_path)
+        if scaler_path.exists():
+            scaler = joblib.load(scaler_path)
+        explainer = ModelExplainer()
+        print(f"Model loaded from {model_path}", file=sys.stderr)
+except Exception as e:
+    print(f"Error loading model: {e}", file=sys.stderr)
+    model = None
+
+init_db()
+
 def normalize_url(url):
     url = url.strip()
     if not url.startswith(('http://', 'https://')):
@@ -53,7 +62,7 @@ def is_valid_url(url):
     try:
         netloc = urlparse(url).netloc.split(':')[0]
         return '.' in netloc
-    except:
+    except Exception:
         return False
 
 def get_cached(url):
@@ -67,53 +76,20 @@ def get_cached(url):
 def set_cached(url, data):
     cache[url] = (data, datetime.now())
 
-# ---------- Загрузка ML-модели и датасета ----------
-model = None
-feature_columns = []
-features_df = None
-
-BASE_DIR = Path(__file__).parent.parent
-try:
-    model_path = BASE_DIR / 'ml' / 'model.pkl'
-    if model_path.exists():
-        model = joblib.load(model_path)
-        # Отладочный вывод вероятности для google.com
-        test_url = 'https://google.com'
-        features = extract_features(test_url).values.reshape(1, -1)
-        prob = model.predict_proba(features)[0][1]
-        print(f"[DEBUG] google.com probability: {prob:.3f}", file=sys.stderr)
-        print(f"✅ Модель загружена из {model_path}", file=sys.stderr)
-except Exception as e:
-    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
-    model = None
-
-    dataset_path = BASE_DIR / 'data' / 'processed' / 'url_dataset_features.csv'
-    if dataset_path.exists():
-        features_df = pd.read_csv(dataset_path)
-        feature_columns = [c for c in features_df.columns if c not in ['url', 'label']]
-        print(f"✅ Датасет загружен: {len(features_df)} записей", file=sys.stderr)
-except Exception as e:
-    print(f"⚠️ Ошибка загрузки: {e}", file=sys.stderr)
-
-init_db()
-
-# ---------- Функция предсказания (только ML, без эвристик) ----------
 def predict(url):
     if model is None:
         return 0.5
     try:
-        # Извлекаем признаки
-        features = extract_features(url)
-        # features - это DataFrame, берем значения и преобразуем в 2D массив
-        X = features.values.reshape(1, -1)
+        feats = extract_features(url)
+        X = feats.values.reshape(1, -1)
+        if scaler is not None:
+            X = scaler.transform(X)
         proba = model.predict_proba(X)[0][1]
         return float(proba)
     except Exception as e:
-        print(f"ML ошибка: {e}", file=sys.stderr)
+        print(f"ML error: {e}", file=sys.stderr)
         return 0.5
 
-
-# ---------- Эндпоинты ----------
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -123,7 +99,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'model_loaded': model is not None,
-        'model_version': 'v2.0_no_heuristics'
+        'model_version': 'v3.4_fixed'
     })
 
 @app.route('/check', methods=['POST'])
@@ -131,37 +107,45 @@ def check_url():
     data = request.json
     raw_url = data.get('url', '').strip()
     if not raw_url:
-        return jsonify({'error': 'URL не указан'}), 400
-
+        return jsonify({'error': 'URL not specified'}), 400
     url = normalize_url(raw_url)
     if not is_valid_url(url):
-        return jsonify({'error': 'Невалидный URL'}), 400
+        return jsonify({'error': 'Invalid URL'}), 400
 
     cached = get_cached(url)
     if cached:
         return jsonify(cached)
 
-    # Прямой вызов модели (без explainer)
-    score = predict(url)   # функция predict возвращает float 0..1
-    probability = score
+    probability = predict(url)
 
-    if probability >= 0.7:
+    if probability >= 0.8:
         verdict, text = "dangerous", "🔴 ОПАСНО"
-    elif probability >= 0.4:
+    elif probability >= 0.6:
         verdict, text = "suspicious", "🟡 ПОДОЗРИТЕЛЬНО"
     else:
         verdict, text = "safe", "🟢 БЕЗОПАСНО"
+
+    explanations = []
+    if explainer is not None:
+        try:
+            expl_data = explainer.predict_with_explanation(url)
+            explanations = expl_data.get('reasons', [])
+        except Exception as e:
+            print(f"Explainer error: {e}", file=sys.stderr)
+            explanations = ["Не удалось сформировать объяснение"]
+    else:
+        explanations = ["Модель загружена без модуля объяснений"]
 
     result = {
         'url': raw_url,
         'verdict': verdict,
         'verdict_text': text,
         'score': round(probability * 100),
-        'explanations': ["ML модель определила уровень опасности"]
+        'explanations': explanations
     }
     set_cached(url, result)
     return jsonify(result)
-    
+
 @app.route('/feedback', methods=['POST'])
 def feedback():
     try:
@@ -170,17 +154,15 @@ def feedback():
         model_verdict = data.get('model_verdict', '')
         user_verdict = data.get('user_verdict', '')
         comment = data.get('comment', '')
-
         if url:
             try:
                 normalized = normalize_url(url)
                 if not is_valid_url(normalized):
                     model_verdict = ""
-            except:
+            except Exception:
                 model_verdict = ""
-
         save_feedback(url, model_verdict, user_verdict, comment)
-        return jsonify({'status': 'ok', 'message': 'Спасибо за отзыв!'})
+        return jsonify({'status': 'ok', 'message': 'Feedback saved'})
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
@@ -191,12 +173,9 @@ def admin_feedbacks():
     try:
         df = get_all_feedbacks()
         if df.empty:
-            return render_template('admin.html', paginated_feedbacks=[],
-                                 current_page=1, total_pages=0, total_feedbacks=0)
-
+            return render_template('admin.html', paginated_feedbacks=[], current_page=1, total_pages=0, total_feedbacks=0)
         page = request.args.get('page', 1, type=int)
         per_page = 20
-
         all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
@@ -209,32 +188,29 @@ def admin_feedbacks():
                 'timestamp': row['timestamp'],
                 'mismatch': mismatch
             })
-
         all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
-
         total_feedbacks = len(all_feedbacks)
         total_pages = math.ceil(total_feedbacks / per_page) if total_feedbacks > 0 else 1
-
         if page < 1:
             page = 1
         if page > total_pages:
             page = total_pages
-
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         paginated_feedbacks = all_feedbacks[start_idx:end_idx]
-
         return render_template('admin.html',
-                             paginated_feedbacks=paginated_feedbacks,
-                             current_page=page,
-                             total_pages=total_pages,
-                             total_feedbacks=total_feedbacks)
+                               paginated_feedbacks=paginated_feedbacks,
+                               current_page=page,
+                               total_pages=total_pages,
+                               total_feedbacks=total_feedbacks)
     except Exception as e:
-        return f'<h1>Ошибка</h1><p>{e}</p><a href="/">На главную</a>'
+        return f'<h1>Error</h1><p>{e}</p><a href="/">Home</a>'
+
 @app.route('/admin/download-db')
 @auth.login_required
 def admin_download_db():
     return download_db()
+
 @app.route('/download-db')
 def download_db():
     try:
@@ -247,12 +223,12 @@ def download_db():
                     db_path = alt
                     break
             else:
-                return "❌ Файл feedback.db не найден.", 404
+                return "feedback.db not found.", 404
         return send_file(db_path, as_attachment=True, download_name='feedback.db')
     except PermissionError:
-        return "❌ Нет прав на чтение файла БД.", 403
+        return "Permission denied.", 403
     except Exception as e:
-        return f"❌ Внутренняя ошибка сервера: {e}", 500
+        return f"Internal error: {e}", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
