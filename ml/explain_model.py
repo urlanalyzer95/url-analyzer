@@ -66,15 +66,15 @@ class ModelExplainer:
                 comment = self.feature_comments.get(name, name)
                 
                 if name.startswith('has_') and value == 1:
-                    reasons.append(f"🔍 {comment}")
+                    reasons.append(f" {comment}")
                 elif self.means is not None and not name.startswith('has_'):
                     mean_val = self.means[i] if i < len(self.means) else 0
                     if mean_val > 0 and value > mean_val * 1.5:
-                        reasons.append(f"📈 {comment} (значение {value})")
+                        reasons.append(f" {comment} (значение {value})")
             
             if not reasons:
                 reasons.append("URL содержит комбинацию признаков, типичных для фишинга")
         else:  # Легитимный
-            reasons.append("✅ Подозрительных признаков не обнаружено")
+            reasons.append(" Подозрительных признаков не обнаружено")
         
-        return reasons[:5]  # Максимум 5 причин
+        return reasons[:5]  # Макс 5 причин
