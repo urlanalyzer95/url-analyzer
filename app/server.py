@@ -10,13 +10,12 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# === FIX: Добавляем пути для импортов ===
+# FIX: Добавляем пути для импортов 
 project_root = Path(__file__).parent.parent
 app_dir = Path(__file__).parent
 for p in [str(project_root), str(app_dir)]:
     if p not in sys.path:
         sys.path.insert(0, p)
-# =========================================
 
 from ml.explain_model import ModelExplainer
 from ml.features import extract_features, feature_cols
@@ -35,17 +34,17 @@ def verify_password(username, password):
 app = Flask(__name__, template_folder='templates')
 cache = {}
 model = None
-scaler = None
+#scaler = None
 explainer = None
 BASE_DIR = Path(__file__).parent.parent
 
 try:
     model_path = BASE_DIR / 'ml' / 'model.pkl'
-    scaler_path = BASE_DIR / 'ml' / 'scaler.pkl'
+    #scaler_path = BASE_DIR / 'ml' / 'scaler.pkl'
     if model_path.exists():
         model = joblib.load(model_path)
-        if scaler_path.exists():
-            scaler = joblib.load(scaler_path)
+        #if scaler_path.exists():
+            #scaler = joblib.load(scaler_path)
         explainer = ModelExplainer()
         print(f"✅ Model loaded from {model_path}", file=sys.stderr)
     else:
@@ -88,8 +87,8 @@ def predict(url):
     try:
         feats = extract_features(url)
         X = feats.values.reshape(1, -1)
-        if scaler is not None:
-            X = scaler.transform(X)
+        #if scaler is not None:
+            #X = scaler.transform(X)
         proba = model.predict_proba(X)[0][1]
         return float(proba)
     except Exception as e:
