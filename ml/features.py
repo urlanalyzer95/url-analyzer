@@ -2,7 +2,6 @@ import re
 import pandas as pd
 from urllib.parse import urlparse
 
-# Ровно те 14 признаков, что в вашем датасете
 feature_cols = [
     'url_length', 'num_dots', 'num_hyphens', 'num_slashes', 'num_params',
     'has_ip', 'has_https', 'has_login', 'has_verify', 'has_account',
