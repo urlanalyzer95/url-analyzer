@@ -175,12 +175,7 @@ def feedback():
 @auth.login_required
 def admin_feedbacks():
     try:
-        df = get_all_feedbacks()
-        # if df.empty:
-        #     return render_template('admin.html', paginated_feedbacks=[], current_page=1, total_pages=0, total_feedbacks=0)
-        # page = request.args.get('page', 1, type=int)
-        # per_page = 20
-        
+        df = get_all_feedbacks()        
         all_feedbacks = []
         for _, row in df.iterrows():
             mismatch = row['model_verdict'] != row['user_verdict'] and row['user_verdict'] != 'other'
@@ -195,21 +190,6 @@ def admin_feedbacks():
             })
         all_feedbacks.sort(key=lambda x: x['id'], reverse=True)
         
-        # total_feedbacks = len(all_feedbacks)
-        # total_pages = math.ceil(total_feedbacks / per_page) if total_feedbacks > 0 else 1
-        # if page < 1:
-        #     page = 1
-        # if page > total_pages:
-        #     page = total_pages
-        # start_idx = (page - 1) * per_page
-        # end_idx = start_idx + per_page
-        # paginated_feedbacks = all_feedbacks[start_idx:end_idx]
-        # return render_template('admin.html',
-        #                        paginated_feedbacks=paginated_feedbacks,
-        #                        current_page=page,
-        #                        total_pages=total_pages,
-        #                        total_feedbacks=total_feedbacks)
-
         return render_template('admin.html', feedbacks=all_feedbacks)
     except Exception as e:
         return f'<h1>Error</h1><p>{e}</p><a href="/">Home</a>'
