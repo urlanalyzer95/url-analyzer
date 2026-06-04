@@ -208799,7 +208799,6 @@ url_length,num_dots,num_hyphens,num_slashes,num_params,has_ip,has_https,has_logi
 54,2,2,4,0,0,1,0,0,0,0,1,0,28,0,https://url-analyzer-k1lf.onrender.com/admin/feedbacks
 20,1,0,3,0,0,1,0,0,0,0,0,0,10,0,https://premier.one/
 55,1,1,6,0,0,1,0,0,0,0,0,0,9,0,https://github.com/urlanalyzer95/url-analyzer/tree/main
-18,1,0,2,0,0,1,0,0,0,0,0,0,10,0,https://google.com
 22,2,0,2,0,0,1,0,0,0,0,0,0,14,0,https://www.google.com
 17,1,0,2,0,0,1,0,0,0,0,0,0,9,0,https://yandex.ru
 21,2,0,2,0,0,1,0,0,0,0,0,0,13,0,https://www.yandex.ru
@@ -208864,3 +208863,5 @@ url_length,num_dots,num_hyphens,num_slashes,num_params,has_ip,has_https,has_logi
 32,1,2,3,0,0,1,0,1,0,0,0,1,6,1,https://bit.ly/google-verify-now
 34,1,1,3,0,0,1,0,0,0,0,0,1,11,1,https://tinyurl.com/confirm-paypal
 32,1,1,3,0,0,1,0,0,0,0,0,1,6,1,https://goo.gl/facebook-security
+13,1,0,2,0,0,1,0,0,0,0,0,0,5,0,https://ya.ru
+18,1,0,2,0,0,1,0,0,0,0,0,0,10,0,https://google.com

@@ -163,19 +163,19 @@ if __name__ == '__main__':
             df_clean = clean_url_dataset(df)
             print(f"   После очистки: {len(df_clean):,} строк")
             
-            # ✅ 3. ИЗВЛЕЧЕНИЕ ПРИЗНАКОВ (ПЕРЕНОСИМ СЮДА!)
+            # 3. ИЗВЛЕЧЕНИЕ ПРИЗНАКОВ 
             df_features = extract_features(df_clean)
             print(f"   Извлечено признаков: {len(df_features.columns)}")
             
-            # ✅ 4. УДАЛЕНИЕ ДУБЛИКАТОВ ПО ПРИЗНАКАМ (ПЕРЕД БАЛАНСИРОВКОЙ!)
+            # 4. УДАЛЕНИЕ ДУБЛИКАТОВ ПО ПРИЗНАКАМ 
             feature_cols_only = [col for col in df_features.columns if col not in ['url', 'label']]
             before = len(df_features)
             df_features = df_features.drop_duplicates(subset=feature_cols_only, keep='first')
             after = len(df_features)
-            print(f"\n   🗑️ Удалено дубликатов по признакам: {before - after:,} ({(before-after)/before*100:.1f}%)")
+            print(f"\n   Удалено дубликатов по признакам: {before - after:,} ({(before-after)/before*100:.1f}%)")
             print(f"   Итого уникальных комбинаций признаков: {after:,}")
             
-            # ✅ 5. БАЛАНСИРОВКА (ПОСЛЕ удаления дубликатов!)
+            # 5. БАЛАНСИРОВКА 
             df_balanced = balance_classes(df_features)
             
             # 6. Сохранение
@@ -185,13 +185,13 @@ if __name__ == '__main__':
             # Статистика
             if 'label' in df_balanced.columns:
                 dist = df_balanced['label'].value_counts().to_dict()
-                print(f"\n   📊 Классы: 0={dist.get(0,0):,}, 1={dist.get(1,0):,}")
-                print(f"   📈 Баланс: {dist.get(0,0)/dist.get(1,1):.2f}:1")
+                print(f"\n   Классы: 0={dist.get(0,0):,}, 1={dist.get(1,0):,}")
+                print(f"   Баланс: {dist.get(0,0)/dist.get(1,1):.2f}:1")
             
             print()
             
         except Exception as e:
-            print(f"   ❌ Ошибка: {e}")
+            print(f"   Ошибка: {e}")
             import traceback
             traceback.print_exc()
     
