@@ -210,7 +210,7 @@ def admin_feedbacks():
         #                        total_pages=total_pages,
         #                        total_feedbacks=total_feedbacks)
 
-         return render_template('admin.html', feedbacks=all_feedbacks)
+        return render_template('admin.html', feedbacks=all_feedbacks)
     except Exception as e:
         return f'<h1>Error</h1><p>{e}</p><a href="/">Home</a>'
 
