@@ -59,48 +59,6 @@
         }
         .url-cell a:hover { text-decoration: underline; }
         .empty-msg { padding: 20px; color: #6b7280; font-style: italic; }
-
-        /* Стили пагинации */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 24px;
-            flex-wrap: wrap;
-        }
-        .page-link {
-            display: inline-block;
-            padding: 8px 14px;
-            background-color: #fff;
-            color: #2563eb;
-            text-decoration: none;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-            transition: all 0.2s;
-            font-weight: 500;
-        }
-        .page-link:hover {
-            background-color: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-        }
-        .page-link.active {
-            background-color: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-            cursor: default;
-        }
-        .page-link.disabled {
-            color: #9ca3af;
-            pointer-events: none;
-            background-color: #f9fafb;
-        }
-        .page-info {
-            text-align: center;
-            margin-top: 16px;
-            color: #6b7280;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
@@ -111,7 +69,7 @@
         <a href="/admin/download-db" class="btn btn-secondary">Скачать БД</a>
     </div>
 
-    {% if paginated_feedbacks %}
+    {% if feedbacks %}
     <table>
         <thead>
             <tr>
@@ -124,7 +82,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for fb in paginated_feedbacks %}
+            {% for fb in feedbacks %}
             <tr>
                 <td>{{ fb.id }}</td>
                 <td class="url-cell">
@@ -140,39 +98,7 @@
             {% endfor %}
         </tbody>
     </table>
-
-    <!-- Пагинация -->
-    {% if total_pages > 1 %}
-    <div class="pagination">
-        {% if current_page > 1 %}
-            <a href="?page={{ current_page - 1 }}" class="page-link">← Предыдущая</a>
-        {% else %}
-            <span class="page-link disabled">← Предыдущая</span>
-        {% endif %}
-
-        {% for p in range(1, total_pages + 1) %}
-            {% if p == current_page %}
-                <span class="page-link active">{{ p }}</span>
-            {% elif p <= 3 or p > total_pages - 3 or (p >= current_page - 2 and p <= current_page + 2) %}
-                <a href="?page={{ p }}" class="page-link">{{ p }}</a>
-            {% elif p == 4 and current_page > 4 %}
-                <span class="page-link disabled">...</span>
-            {% elif p == total_pages - 3 and current_page < total_pages - 3 %}
-                <span class="page-link disabled">...</span>
-            {% endif %}
-        {% endfor %}
-
-        {% if current_page < total_pages %}
-            <a href="?page={{ current_page + 1 }}" class="page-link">Следующая →</a>
-        {% else %}
-            <span class="page-link disabled">Следующая →</span>
-        {% endif %}
-    </div>
-    <div class="page-info">
-        Страница {{ current_page }} из {{ total_pages }} · Всего отзывов: {{ total_feedbacks }}
-    </div>
-    {% endif %}
-
+    
     {% else %}
     <p class="empty-msg">Пока нет отзывов</p>
     {% endif %}
