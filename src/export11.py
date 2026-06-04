@@ -33,18 +33,3 @@ else:
     result.to_csv(OUTPUT_DIR / 'new_training_examples.csv', index=False)
     print(f" Экспортировано {len(result)} примеров")
 
-# Очистка БД
-# print("\n Очистка БД...")
-# conn = sqlite3.connect(DB_PATH)
-# cursor = conn.cursor()
-# cursor.execute('SELECT COUNT(*) FROM feedbacks')
-# before = cursor.fetchone()[0]
-# cursor.execute('DELETE FROM feedbacks')
-# cursor.execute('DELETE FROM sqlite_sequence WHERE name="feedbacks"')
-# conn.commit()
-# conn.close()
-# print(f"   Удалено {before} записей")
-
-# print("\n ГОТОВО!")
-# print("   • data/new_training_examples.csv — для дообучения")
-# print("   • БД очищена")
